@@ -7,57 +7,25 @@ Coordinates between AI, Amap MCP server, and browser control MCP server.
 import asyncio
 import os
 import json
-import httpx
 from anthropic import Anthropic
+from amap_mcp_client import create_amap_client
 
-AMAP_API_KEY = os.getenv("AMAP_API_KEY", "")
-
-async def get_location_coordinates(location_name: str) -> dict:
+async def get_location_coordinates(location_name: str, amap_client) -> dict:
     """
-    Get coordinates for a location using Amap Geocoding API.
-    In production, this should use an Amap MCP server.
-    """
-    if not AMAP_API_KEY:
-        print("Warning: AMAP_API_KEY not set, using mock coordinates")
-        mock_coords = {
-            "北京": {"lng": 116.397128, "lat": 39.916527},
-            "上海": {"lng": 121.473701, "lat": 31.230416},
-            "广州": {"lng": 113.264385, "lat": 23.129112},
-            "深圳": {"lng": 114.057868, "lat": 22.543099},
-            "杭州": {"lng": 120.155070, "lat": 30.274085},
-        }
-        for city, coords in mock_coords.items():
-            if city in location_name:
-                return {
-                    "name": city,
-                    "longitude": coords["lng"],
-                    "latitude": coords["lat"]
-                }
-        return {
-            "name": location_name,
-            "longitude": 116.397128,
-            "latitude": 39.916527
-        }
+    Get coordinates for a location using Amap MCP server.
     
-    async with httpx.AsyncClient() as client:
-        response = await client.get(
-            "https://restapi.amap.com/v3/geocode/geo",
-            params={
-                "key": AMAP_API_KEY,
-                "address": location_name
-            }
-        )
-        data = response.json()
+    Args:
+        location_name: Name of the location to geocode
+        amap_client: Amap MCP client instance
         
-        if data.get("status") == "1" and data.get("geocodes"):
-            location = data["geocodes"][0]["location"].split(",")
-            return {
-                "name": location_name,
-                "longitude": float(location[0]),
-                "latitude": float(location[1])
-            }
-        else:
-            raise ValueError(f"Failed to geocode location: {location_name}")
+    Returns:
+        Dictionary with location coordinates
+    """
+    try:
+        result = await amap_client.geocode(location_name)
+        return result
+    except Exception as e:
+        raise ValueError(f"Failed to geocode location '{location_name}': {str(e)}")
 
 async def parse_navigation_request(user_input: str, client: Anthropic) -> dict:
     """
@@ -131,40 +99,46 @@ async def main():
         print("No input provided.")
         return
     
-    print(f"\n[1/4] Parsing request with AI...")
-    try:
-        locations = await parse_navigation_request(user_input, client)
-        print(f"✓ Parsed: {locations['start']} → {locations['end']}")
-    except Exception as e:
-        print(f"✗ Failed to parse request: {e}")
-        return
+    print(f"\n[1/5] Connecting to Amap MCP server...")
+    amap_client = create_amap_client()
     
-    print(f"\n[2/4] Getting coordinates for start location...")
-    try:
-        start_coords = await get_location_coordinates(locations['start'])
-        print(f"✓ Start: {start_coords['name']} ({start_coords['longitude']}, {start_coords['latitude']})")
-    except Exception as e:
-        print(f"✗ Failed to get start coordinates: {e}")
-        return
-    
-    print(f"\n[3/4] Getting coordinates for end location...")
-    try:
-        end_coords = await get_location_coordinates(locations['end'])
-        print(f"✓ End: {end_coords['name']} ({end_coords['longitude']}, {end_coords['latitude']})")
-    except Exception as e:
-        print(f"✗ Failed to get end coordinates: {e}")
-        return
-    
-    print(f"\n[4/4] Opening navigation in browser...")
-    try:
-        result = await open_browser_navigation(start_coords, end_coords)
-        print(f"✓ {result['message']}")
-        print(f"\nNavigation URL: {result['url']}")
-    except Exception as e:
-        print(f"✗ Failed to open navigation: {e}")
-        return
-    
-    print("\n=== Navigation request completed successfully! ===")
+    async with amap_client:
+        print("✓ Connected to Amap MCP server")
+        
+        print(f"\n[2/5] Parsing request with AI...")
+        try:
+            locations = await parse_navigation_request(user_input, client)
+            print(f"✓ Parsed: {locations['start']} → {locations['end']}")
+        except Exception as e:
+            print(f"✗ Failed to parse request: {e}")
+            return
+        
+        print(f"\n[3/5] Getting coordinates for start location via MCP...")
+        try:
+            start_coords = await get_location_coordinates(locations['start'], amap_client)
+            print(f"✓ Start: {start_coords['name']} ({start_coords['longitude']}, {start_coords['latitude']})")
+        except Exception as e:
+            print(f"✗ Failed to get start coordinates: {e}")
+            return
+        
+        print(f"\n[4/5] Getting coordinates for end location via MCP...")
+        try:
+            end_coords = await get_location_coordinates(locations['end'], amap_client)
+            print(f"✓ End: {end_coords['name']} ({end_coords['longitude']}, {end_coords['latitude']})")
+        except Exception as e:
+            print(f"✗ Failed to get end coordinates: {e}")
+            return
+        
+        print(f"\n[5/5] Opening navigation in browser...")
+        try:
+            result = await open_browser_navigation(start_coords, end_coords)
+            print(f"✓ {result['message']}")
+            print(f"\nNavigation URL: {result['url']}")
+        except Exception as e:
+            print(f"✗ Failed to open navigation: {e}")
+            return
+        
+        print("\n=== Navigation request completed successfully! ===")
 
 if __name__ == "__main__":
     asyncio.run(main())

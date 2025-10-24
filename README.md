@@ -16,9 +16,9 @@
    ↓
 AI解析(Claude)
    ↓
-高德地图API/MCP Server → 获取坐标
+高德地图MCP Server → 获取坐标(通过MCP协议)
    ↓
-浏览器控制MCP Server → 打开导航
+浏览器控制MCP Server → 打开导航(通过MCP协议)
 ```
 
 ### MCP组件
@@ -28,9 +28,14 @@ AI解析(Claude)
    - 工具: `open_url`, `open_map_navigation`
    - 遵循MCP协议标准
 
-2. **主应用程序** (`main.py`)
+2. **Amap MCP Client** (`amap_mcp_client.py`)
+   - 连接到高德地图MCP服务器
+   - 提供地理编码功能
+   - 支持Mock模式用于测试
+
+3. **主应用程序** (`main.py`)
    - AI指令解析(Claude)
-   - 地理编码(高德地图API)
+   - 通过MCP协议调用高德地图服务
    - 协调各MCP服务器
 
 ## 快速开始
@@ -45,7 +50,15 @@ pip install -r requirements.txt
 
 ```bash
 export ANTHROPIC_API_KEY="your-anthropic-api-key"
-export AMAP_API_KEY="your-amap-api-key"  # 可选，不设置将使用模拟数据
+
+# 配置高德MCP服务器(二选一):
+# 方式1: 指定MCP服务器路径
+export AMAP_MCP_SERVER_PATH="/path/to/amap-mcp-server"
+
+# 方式2: 使用API Key(将使用Mock客户端)
+export AMAP_API_KEY="your-amap-api-key"
+
+# 如果都不设置，将使用内置Mock客户端进行测试
 ```
 
 ### 3. 运行程序
@@ -94,6 +107,7 @@ python mcp_browser_server.py
 ```
 .
 ├── main.py                 # 主应用程序
+├── amap_mcp_client.py      # 高德地图MCP客户端
 ├── mcp_browser_server.py   # 浏览器控制MCP服务器
 ├── requirements.txt        # Python依赖
 └── README.md              # 项目文档
@@ -101,13 +115,18 @@ python mcp_browser_server.py
 
 ## 配置说明
 
-### 高德地图API Key
+### 高德地图MCP服务器
 
-1. 注册账号: https://console.amap.com/
-2. 创建应用获取API Key
-3. 设置环境变量 `AMAP_API_KEY`
+**方式1: 使用官方MCP服务器(推荐)**
 
-如果不设置API Key，程序将使用内置的模拟坐标数据(仅支持北京、上海、广州、深圳、杭州)。
+1. 访问高德地图MCP文档: https://lbs.amap.com/api/mcp-server/gettingstarted
+2. 按照文档安装高德MCP服务器
+3. 设置环境变量: `export AMAP_MCP_SERVER_PATH="/path/to/amap-mcp-server"`
+
+**方式2: 使用Mock客户端(开发测试)**
+
+如果不设置MCP服务器路径，程序将自动使用内置Mock客户端，支持以下城市坐标:
+- 北京、上海、广州、深圳、杭州、成都、西安、重庆、南京、武汉
 
 ### Anthropic API Key
 
@@ -124,16 +143,20 @@ $ python main.py
 Enter your navigation request (e.g., '从北京到上海', '我要从广州去深圳'):
 > 从北京到上海
 
-[1/4] Parsing request with AI...
+[1/5] Connecting to Amap MCP server...
+Note: Using mock Amap MCP client. Set AMAP_MCP_SERVER_PATH or AMAP_API_KEY to use real server.
+✓ Connected to Amap MCP server
+
+[2/5] Parsing request with AI...
 ✓ Parsed: 北京 → 上海
 
-[2/4] Getting coordinates for start location...
+[3/5] Getting coordinates for start location via MCP...
 ✓ Start: 北京 (116.397128, 39.916527)
 
-[3/4] Getting coordinates for end location...
+[4/5] Getting coordinates for end location via MCP...
 ✓ End: 上海 (121.473701, 31.230416)
 
-[4/4] Opening navigation in browser...
+[5/5] Opening navigation in browser...
 ✓ Navigation opened from 北京 to 上海
 
 Navigation URL: https://uri.amap.com/navigation?from=116.397128,39.916527&to=121.473701,31.230416&mode=car&policy=1&src=ai-navigator&coordinate=gaode&callnative=0
@@ -143,11 +166,13 @@ Navigation URL: https://uri.amap.com/navigation?from=116.397128,39.916527&to=121
 
 ## 扩展功能(后续版本)
 
-- [ ] 集成高德地图MCP Server(替代直接API调用)
-- [ ] 支持语音输入
+- [x] 集成高德地图MCP Server(已通过MCP协议调用)
+- [ ] 支持语音输入MCP Server
 - [ ] 支持多种地图服务(百度地图等)
 - [ ] 桌面应用版本(Electron)
 - [ ] 路线偏好设置(避开高速、最短时间等)
+- [ ] POI搜索功能
+- [ ] 路径规划和路况信息
 
 ## 故障排除
 
