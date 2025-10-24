@@ -6,10 +6,12 @@
 
 本项目实现了以下高德地图API功能:
 
-1. **地理编码** - 将地址转换为经纬度坐标
-2. **逆地理编码** - 将经纬度坐标转换为地址
-3. **POI搜索** - 搜索兴趣点(餐厅、商店等)
-4. **距离测量** - 计算两点间的距离
+1. **IP定位** - 根据IP地址自动获取当前位置
+2. **天气查询** - 查询实时天气和天气预报
+3. **地理编码** - 将地址转换为经纬度坐标
+4. **逆地理编码** - 将经纬度坐标转换为地址
+5. **POI搜索** - 搜索兴趣点(餐厅、商店等)
+6. **距离测量** - 计算两点间的距离
 
 ## 快速开始
 
@@ -58,13 +60,35 @@ npm start
 
 ## API使用示例
 
-### 地理编码
+### IP定位
 
 ```javascript
 import AmapClient from './amapClient.js';
 
 const client = new AmapClient('your_api_key');
 
+// 自动获取当前位置
+const result = await client.getLocationByIp();
+console.log(result.city); // "北京市"
+console.log(result.adcode); // "110000"
+```
+
+### 天气查询
+
+```javascript
+// 查询实时天气
+const weather = await client.getWeather('北京', 'base');
+console.log(weather.weather); // "晴"
+console.log(weather.temperature); // "25"
+
+// 查询天气预报
+const forecast = await client.getWeather('北京', 'all');
+console.log(forecast.casts); // 未来3-4天的天气预报
+```
+
+### 地理编码
+
+```javascript
 // 地址转坐标
 const result = await client.geocode('北京市朝阳区阜通东大街6号', '北京');
 console.log(result.location); // "116.481488,39.990464"
@@ -129,6 +153,8 @@ console.log(result.distance); // 单位:米
 ## 参考文档
 
 - [高德地图Web服务API文档](https://lbs.amap.com/api/webservice/summary)
+- [IP定位API](https://lbs.amap.com/api/webservice/guide/api/ipconfig)
+- [天气查询API](https://lbs.amap.com/api/webservice/guide/api/weatherinfo)
 - [地理编码API](https://lbs.amap.com/api/webservice/guide/api/georecode)
 - [POI搜索API](https://lbs.amap.com/api/webservice/guide/api/search)
 

@@ -174,6 +174,104 @@ class AmapClient {
       };
     }
   }
+
+  /**
+   * IP定位 - 根据IP地址获取位置信息
+   * @param {string} ip - IP地址(可选,不传则自动识别)
+   * @returns {Promise<Object>} IP定位结果
+   */
+  async getLocationByIp(ip = '') {
+    try {
+      const response = await axios.get(`${this.baseUrl}/ip`, {
+        params: {
+          key: this.apiKey,
+          ip: ip
+        }
+      });
+
+      if (response.data.status === '1') {
+        return {
+          success: true,
+          province: response.data.province,
+          city: response.data.city,
+          adcode: response.data.adcode,
+          rectangle: response.data.rectangle
+        };
+      } else {
+        return {
+          success: false,
+          error: 'IP定位失败',
+          info: response.data.info
+        };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * 天气查询 - 查询指定城市的天气信息
+   * @param {string} city - 城市名称或城市编码(adcode)
+   * @param {string} extensions - base:返回实况天气, all:返回预报天气
+   * @returns {Promise<Object>} 天气查询结果
+   */
+  async getWeather(city, extensions = 'base') {
+    try {
+      const response = await axios.get(`${this.baseUrl}/weather/weatherInfo`, {
+        params: {
+          key: this.apiKey,
+          city: city,
+          extensions: extensions
+        }
+      });
+
+      if (response.data.status === '1') {
+        if (extensions === 'base' && response.data.lives && response.data.lives.length > 0) {
+          const live = response.data.lives[0];
+          return {
+            success: true,
+            type: 'live',
+            province: live.province,
+            city: live.city,
+            weather: live.weather,
+            temperature: live.temperature,
+            winddirection: live.winddirection,
+            windpower: live.windpower,
+            humidity: live.humidity,
+            reporttime: live.reporttime
+          };
+        } else if (extensions === 'all' && response.data.forecasts && response.data.forecasts.length > 0) {
+          const forecast = response.data.forecasts[0];
+          return {
+            success: true,
+            type: 'forecast',
+            province: forecast.province,
+            city: forecast.city,
+            casts: forecast.casts
+          };
+        } else {
+          return {
+            success: false,
+            error: '天气数据为空'
+          };
+        }
+      } else {
+        return {
+          success: false,
+          error: '天气查询失败',
+          info: response.data.info
+        };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
 }
 
 export default AmapClient;
