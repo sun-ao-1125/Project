@@ -272,6 +272,59 @@ class AmapClient {
       };
     }
   }
+
+  /**
+   * 路径规划 - 驾车路径规划
+   * @param {string} origin - 起点坐标 (格式: "经度,纬度")
+   * @param {string} destination - 终点坐标 (格式: "经度,纬度")
+   * @param {string} strategy - 路径策略(0-速度优先, 1-费用优先, 2-距离优先, 3-不走高速, 4-躲避拥堵, 5-多策略)
+   * @returns {Promise<Object>} 路径规划结果
+   */
+  async drivingRoute(origin, destination, strategy = '0') {
+    try {
+      const response = await axios.get(`${this.baseUrl}/direction/driving`, {
+        params: {
+          key: this.apiKey,
+          origin: origin,
+          destination: destination,
+          strategy: strategy,
+          extensions: 'all'
+        }
+      });
+
+      if (response.data.status === '1' && response.data.route && response.data.route.paths && response.data.route.paths.length > 0) {
+        const path = response.data.route.paths[0];
+        return {
+          success: true,
+          distance: path.distance,
+          duration: path.duration,
+          strategy: path.strategy,
+          tolls: path.tolls,
+          toll_distance: path.toll_distance,
+          traffic_lights: path.traffic_lights,
+          steps: path.steps.map(step => ({
+            instruction: step.instruction,
+            distance: step.distance,
+            duration: step.duration,
+            road: step.road,
+            orientation: step.orientation,
+            action: step.action
+          }))
+        };
+      } else {
+        return {
+          success: false,
+          error: '路径规划失败',
+          info: response.data.info
+        };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
 }
 
 export default AmapClient;
