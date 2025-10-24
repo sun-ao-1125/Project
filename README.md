@@ -48,7 +48,10 @@ pip install -r requirements.txt
 
 ### 2. 设置环境变量
 
+#### 方式一: 使用Anthropic Claude
+
 ```bash
+export AI_PROVIDER="anthropic"
 export ANTHROPIC_API_KEY="your-anthropic-api-key"
 
 # 配置高德MCP服务器(二选一):
@@ -60,6 +63,22 @@ export AMAP_API_KEY="your-amap-api-key"
 
 # 如果都不设置，将使用内置Mock客户端进行测试
 ```
+
+#### 方式二: 使用OpenAI兼容API (如七牛)
+
+```bash
+export AI_PROVIDER="openai"
+export OPENAI_API_KEY="your-openai-api-key"
+export OPENAI_BASE_URL="https://api.qiniu.com/v1"  # 七牛API端点
+export OPENAI_MODEL="gpt-3.5-turbo"  # 可选，默认为gpt-3.5-turbo
+export AMAP_API_KEY="your-amap-api-key"  # 可选，不设置将使用模拟数据
+```
+
+**支持的OpenAI兼容服务:**
+- 七牛AI Token API
+- OpenAI官方API
+- Azure OpenAI
+- 其他遵循OpenAI API标准的服务
 
 ### 3. 运行程序
 
@@ -97,7 +116,9 @@ python mcp_browser_server.py
 
 ## 技术栈
 
-- **AI模型**: Claude 3.5 Sonnet (Anthropic)
+- **AI模型**: 支持多种提供商
+  - Anthropic Claude 3.5 Sonnet
+  - OpenAI兼容API (包括七牛、OpenAI、Azure等)
 - **MCP协议**: Model Context Protocol
 - **地图服务**: 高德地图API
 - **编程语言**: Python 3.8+
@@ -107,6 +128,7 @@ python mcp_browser_server.py
 ```
 .
 ├── main.py                 # 主应用程序
+├── ai_provider.py          # AI提供商抽象层
 ├── amap_mcp_client.py      # 高德地图MCP客户端
 ├── mcp_browser_server.py   # 浏览器控制MCP服务器
 ├── requirements.txt        # Python依赖
@@ -114,6 +136,41 @@ python mcp_browser_server.py
 ```
 
 ## 配置说明
+
+### AI提供商配置
+
+#### 选项1: Anthropic Claude
+
+1. 注册账号: https://console.anthropic.com/
+2. 创建API Key
+3. 设置环境变量:
+   ```bash
+   export AI_PROVIDER="anthropic"
+   export ANTHROPIC_API_KEY="your-api-key"
+   ```
+
+#### 选项2: 七牛AI Token API
+
+1. 注册账号: https://portal.qiniu.com/
+2. 获取API Key
+3. 参考文档: https://developer.qiniu.com/aitokenapi/12882/ai-inference-api
+4. 设置环境变量:
+   ```bash
+   export AI_PROVIDER="openai"
+   export OPENAI_API_KEY="your-qiniu-api-key"
+   export OPENAI_BASE_URL="https://api.qiniu.com/v1"
+   export OPENAI_MODEL="gpt-3.5-turbo"
+   ```
+
+#### 选项3: 其他OpenAI兼容服务
+
+设置相应的环境变量:
+```bash
+export AI_PROVIDER="openai"
+export OPENAI_API_KEY="your-api-key"
+export OPENAI_BASE_URL="https://your-service-url/v1"
+export OPENAI_MODEL="your-model-name"
+```
 
 ### 高德地图MCP服务器
 
@@ -128,18 +185,17 @@ python mcp_browser_server.py
 如果不设置MCP服务器路径，程序将自动使用内置Mock客户端，支持以下城市坐标:
 - 北京、上海、广州、深圳、杭州、成都、西安、重庆、南京、武汉
 
-### Anthropic API Key
-
-1. 注册账号: https://console.anthropic.com/
-2. 创建API Key
-3. 设置环境变量 `ANTHROPIC_API_KEY`
-
 ## 示例
 
+### 使用Anthropic Claude
+
 ```bash
+$ export AI_PROVIDER="anthropic"
+$ export ANTHROPIC_API_KEY="sk-ant-..."
 $ python main.py
 === AI Map Navigator (MCP Architecture) ===
 
+Using AI provider: anthropic
 Enter your navigation request (e.g., '从北京到上海', '我要从广州去深圳'):
 > 从北京到上海
 
@@ -164,6 +220,38 @@ Navigation URL: https://uri.amap.com/navigation?from=116.397128,39.916527&to=121
 === Navigation request completed successfully! ===
 ```
 
+### 使用七牛AI Token API
+
+```bash
+$ export AI_PROVIDER="openai"
+$ export OPENAI_API_KEY="your-qiniu-key"
+$ export OPENAI_BASE_URL="https://api.qiniu.com/v1"
+$ python main.py
+=== AI Map Navigator (MCP Architecture) ===
+
+Using AI provider: openai
+Enter your navigation request (e.g., '从北京到上海', '我要从广州去深圳'):
+> 我想去深圳
+
+[1/5] Connecting to Amap MCP server...
+Note: Using mock Amap MCP client. Set AMAP_MCP_SERVER_PATH or AMAP_API_KEY to use real server.
+✓ Connected to Amap MCP server
+
+[2/5] Parsing request with AI...
+✓ Parsed: 当前位置 → 深圳
+
+[3/5] Getting coordinates for start location via MCP...
+✓ Start: 当前位置 (116.397128, 39.916527)
+
+[4/5] Getting coordinates for end location via MCP...
+✓ End: 深圳 (114.057868, 22.543099)
+
+[5/5] Opening navigation in browser...
+✓ Navigation opened from 当前位置 to 深圳
+
+=== Navigation request completed successfully! ===
+```
+
 ## 扩展功能(后续版本)
 
 - [x] 集成高德地图MCP Server(已通过MCP协议调用)
@@ -181,12 +269,19 @@ Navigation URL: https://uri.amap.com/navigation?from=116.397128,39.916527&to=121
 - 尝试手动复制URL到浏览器
 
 **问题**: AI解析失败
-- 检查ANTHROPIC_API_KEY是否正确设置
+- 检查AI_PROVIDER环境变量是否正确设置
+- 对于Anthropic: 检查ANTHROPIC_API_KEY是否正确设置
+- 对于OpenAI兼容API: 检查OPENAI_API_KEY和OPENAI_BASE_URL是否正确设置
 - 确保网络连接正常
+- 检查API配额是否充足
 
 **问题**: 坐标获取失败
 - 检查AMAP_API_KEY是否正确
 - 确认高德API配额未超限
+
+**问题**: 如何切换AI提供商
+- 设置AI_PROVIDER环境变量为"anthropic"或"openai"
+- 确保相应的API密钥已设置
 
 ## License
 

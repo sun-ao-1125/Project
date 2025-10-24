@@ -6,8 +6,7 @@ Coordinates between AI, Amap MCP server, and browser control MCP server.
 
 import asyncio
 import os
-import json
-from anthropic import Anthropic
+from ai_provider import create_ai_provider
 from amap_mcp_client import create_amap_client
 
 async def get_location_coordinates(location_name: str, amap_client) -> dict:
@@ -27,36 +26,11 @@ async def get_location_coordinates(location_name: str, amap_client) -> dict:
     except Exception as e:
         raise ValueError(f"Failed to geocode location '{location_name}': {str(e)}")
 
-async def parse_navigation_request(user_input: str, client: Anthropic) -> dict:
+async def parse_navigation_request(user_input: str, ai_provider) -> dict:
     """
     Use AI to parse user's navigation request and extract locations.
     """
-    prompt = f"""Parse this navigation request and extract the start location (A) and end location (B).
-Return a JSON object with 'start' and 'end' keys.
-
-User request: {user_input}
-
-Response format:
-{{"start": "location A", "end": "location B"}}
-
-Only return the JSON, no other text."""
-
-    message = client.messages.create(
-        model="claude-3-5-sonnet-20241022",
-        max_tokens=200,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    
-    response_text = message.content[0].text.strip()
-    
-    try:
-        return json.loads(response_text)
-    except json.JSONDecodeError:
-        import re
-        json_match = re.search(r'\{[^}]+\}', response_text)
-        if json_match:
-            return json.loads(json_match.group())
-        raise ValueError("Failed to parse AI response")
+    return await ai_provider.parse_navigation_request(user_input)
 
 async def open_browser_navigation(start_coords: dict, end_coords: dict):
     """
@@ -84,13 +58,22 @@ async def main():
     """Main application flow."""
     print("=== AI Map Navigator (MCP Architecture) ===\n")
     
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        print("Error: ANTHROPIC_API_KEY environment variable not set")
-        print("Please set it with: export ANTHROPIC_API_KEY='your-api-key'")
+    try:
+        ai_provider = create_ai_provider()
+        provider_type = os.getenv("AI_PROVIDER", "anthropic")
+        print(f"Using AI provider: {provider_type}")
+    except ValueError as e:
+        print(f"Error: {e}")
+        print("\nConfiguration guide:")
+        print("- For Anthropic Claude:")
+        print("  export AI_PROVIDER='anthropic'")
+        print("  export ANTHROPIC_API_KEY='your-api-key'")
+        print("- For OpenAI-compatible APIs (e.g., Qiniu):")
+        print("  export AI_PROVIDER='openai'")
+        print("  export OPENAI_API_KEY='your-api-key'")
+        print("  export OPENAI_BASE_URL='https://api.example.com/v1'")
+        print("  export OPENAI_MODEL='gpt-3.5-turbo'  # optional")
         return
-    
-    client = Anthropic(api_key=api_key)
     
     print("Enter your navigation request (e.g., '从北京到上海', '我要从广州去深圳'):")
     user_input = input("> ").strip()
@@ -107,7 +90,7 @@ async def main():
         
         print(f"\n[2/5] Parsing request with AI...")
         try:
-            locations = await parse_navigation_request(user_input, client)
+            locations = await parse_navigation_request(user_input, ai_provider)
             print(f"✓ Parsed: {locations['start']} → {locations['end']}")
         except Exception as e:
             print(f"✗ Failed to parse request: {e}")
