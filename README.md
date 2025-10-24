@@ -12,6 +12,7 @@
 4. **逆地理编码** - 将经纬度坐标转换为地址
 5. **POI搜索** - 搜索兴趣点(餐厅、商店等)
 6. **距离测量** - 计算两点间的距离
+7. **🤖 AI路线规划** - 使用DeepSeek AI模型理解自然语言输入,智能规划路线
 
 ## 快速开始
 
@@ -42,7 +43,11 @@ npm install
 ### 4. 运行示例
 
 ```bash
+# 运行基础功能示例
 npm start
+
+# 运行AI智能路线规划
+npm run ai-route
 ```
 
 ## 项目结构
@@ -51,7 +56,9 @@ npm start
 .
 ├── src/
 │   ├── amapClient.js    # 高德地图API客户端封装
-│   └── index.js         # 示例代码
+│   ├── aiService.js     # DeepSeek AI服务封装
+│   ├── index.js         # 基础功能示例代码
+│   └── aiRouteDemo.js   # AI智能路线规划示例
 ├── .env.example         # 环境变量模板
 ├── .gitignore
 ├── package.json
@@ -120,6 +127,88 @@ const result = await client.distance(
   1  // 1=直线距离, 3=驾车距离
 );
 console.log(result.distance); // 单位:米
+```
+
+### 路线规划
+
+```javascript
+// 驾车路线规划
+const result = await client.drivingRoute(
+  '116.481488,39.990464',  // 起点坐标
+  '121.472644,31.231706',  // 终点坐标
+  '4'  // 策略: 0-速度优先, 1-费用优先, 2-距离优先, 3-不走高速, 4-躲避拥堵
+);
+console.log(result.distance); // 总距离(米)
+console.log(result.duration); // 预计时间(秒)
+console.log(result.tolls); // 通行费(元)
+console.log(result.steps); // 详细导航步骤
+```
+
+## 🤖 AI智能路线规划
+
+### 功能说明
+
+AI智能路线规划结合了DeepSeek AI模型和高德地图API,让你可以用自然语言描述行程,系统会自动:
+1. 使用AI理解你的输入,提取起点和终点
+2. 调用高德地图API进行地理编码
+3. 规划最佳驾车路线
+4. 生成友好的AI路线摘要
+
+### 配置DeepSeek API Key
+
+1. 访问 [DeepSeek开放平台](https://platform.deepseek.com/)
+2. 注册/登录账号
+3. 创建API Key
+4. 在 `.env` 文件中添加:
+   ```
+   DEEPSEEK_API_KEY=your_deepseek_api_key_here
+   ```
+
+### 使用方法
+
+```bash
+npm run ai-route
+```
+
+然后输入自然语言描述,例如:
+- "我要从北京天安门去上海东方明珠"
+- "从杭州西湖到苏州拙政园"
+- "帮我规划从广州塔到深圳世界之窗的路线"
+
+### AI路线规划示例代码
+
+```javascript
+import AmapClient from './amapClient.js';
+import AIService from './aiService.js';
+
+const amapClient = new AmapClient('your_amap_key');
+const aiService = new AIService('your_deepseek_key');
+
+// 1. AI解析自然语言输入
+const parseResult = await aiService.parseLocationInput(
+  "我要从北京天安门去上海东方明珠"
+);
+console.log(parseResult.origin);      // "北京天安门"
+console.log(parseResult.destination); // "上海东方明珠"
+
+// 2. 地理编码
+const originGeo = await amapClient.geocode(parseResult.origin);
+const destGeo = await amapClient.geocode(parseResult.destination);
+
+// 3. 路线规划
+const route = await amapClient.drivingRoute(
+  originGeo.location,
+  destGeo.location,
+  '4' // 躲避拥堵
+);
+
+// 4. AI生成路线摘要
+const summary = await aiService.generateRouteSummary(
+  route,
+  originGeo.formatted_address,
+  destGeo.formatted_address
+);
+console.log(summary.summary);
 ```
 
 ## 集成到Claude Code MCP
