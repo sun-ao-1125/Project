@@ -45,11 +45,12 @@ async function main() {
   console.log('===== 🤖 AI驱动的智能路线规划 =====\n');
   console.log('💡 提示: 你可以用自然语言描述你的行程\n');
   console.log('示例输入:');
-  console.log('  - "我要从北京天安门去上海东方明珠"');
-  console.log('  - "从杭州西湖到苏州拙政园"');
-  console.log('  - "帮我规划从广州塔到深圳世界之窗的路线"\n');
+  console.log('  - "去上海东方明珠"');
+  console.log('  - "到杭州西湖的路线"');
+  console.log('  - "从公司出发到北京站"');
 
-  const userInput = await getUserInput('请输入你的行程: ');
+  // 获取用户输入后自动处理定位
+  const userInput = await getUserInput('请输入你的行程描述（例：去九寨沟）: ');
 
   if (!userInput.trim()) {
     console.log('输入为空,程序退出');
@@ -57,8 +58,20 @@ async function main() {
   }
 
   console.log('\n🔍 正在使用AI解析你的需求...');
-  
   const parseResult = await aiService.parseLocationInput(userInput);
+  
+  // 新增：自动处理当前位置
+  if (parseResult.origin === '当前位置') {
+    console.log('\n📍 正在获取当前位置...');
+    const currentLocation = await amapClient.getCurrentLocation();
+    if (currentLocation.success) {
+      parseResult.origin = currentLocation.formatted_address;
+      console.log(`✅ 已使用当前位置: ${parseResult.origin}`);
+    } else {
+      console.log('⚠️ 自动定位失败，请手动输入起点');
+      parseResult.origin = await getUserInput('请输入详细起点地址: ');
+    }
+  }
   
   if (!parseResult.success) {
     console.error('❌ AI解析失败:', parseResult.error);
@@ -129,6 +142,25 @@ async function main() {
     console.log('━'.repeat(60));
   }
 
+  // 修改后的自动打开地图逻辑
+  try {
+    const [originLng, originLat] = originGeocode.location.split(',');
+    const [destLng, destLat] = destGeocode.location.split(',');
+
+    console.log('\n🌐 正在打开高德地图展示路线...');
+    await amapClient.openMap('amap-web', {
+      lat: destLat,
+      lng: destLng,
+      address: destGeocode.formatted_address,
+      origin: `${originLng},${originLat}`,
+      originAddress: originGeocode.formatted_address,
+      strategy: '4'
+    });
+    console.log('✅ 地图已打开，正在展示最佳路线');
+  } catch (e) {
+    console.warn('⚠️ 地图打开失败:', e.message);
+  }
+
   console.log('\n🛣️  详细导航指引:');
   console.log('━'.repeat(60));
   routeResult.steps.slice(0, 10).forEach((step, index) => {
@@ -142,8 +174,14 @@ async function main() {
     console.log(`... 还有 ${routeResult.steps.length - 10} 个导航步骤\n`);
   }
 
+  // 修改main函数末尾部分
   console.log('━'.repeat(60));
   console.log('✨ 祝你旅途愉快! ✨');
+
+  // 删除以下用户确认环节代码
+  process.exit(0);
 }
 
+// 确保只执行主函数
 main().catch(console.error);
+

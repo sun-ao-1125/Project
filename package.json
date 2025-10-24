@@ -6,14 +6,21 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "ai-route": "node src/aiRouteDemo.js"
+    "ai-route": "node src/aiRouteDemo.js",
+    "navigate": "node src/aiRouteDemo.js"
   },
-  "keywords": ["amap", "mcp", "gaode", "map"],
+  "keywords": [
+    "amap",
+    "mcp",
+    "gaode",
+    "map"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
     "axios": "^1.7.7",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "open": "^10.2.0"
   }
 }

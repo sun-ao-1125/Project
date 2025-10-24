@@ -325,6 +325,70 @@ class AmapClient {
       };
     }
   }
+
+  async openMap(type = 'amap-web', params = {}) {
+      const schemes = {
+          'amap-web': {
+              url: 'https://uri.amap.com/navigation',
+              params: (lat, lng, address, origin, originAddress) => 
+                  `from=${origin ? `${origin},${encodeURIComponent(originAddress || '起点位置')}` : "当前位置"}&to=${lng},${lat},${encodeURIComponent(address || '目标位置')}&mode=car&strategy=4`
+          }
+      };  // Fixed extra bracket
+  
+      try {
+          const { lat, lng, address, origin, originAddress } = params;
+          if (!lat || !lng) throw new Error('必须提供经纬度坐标');
+    
+          const mapConfig = schemes[type];
+          if (!mapConfig) throw new Error('不支持的打开方式');
+          
+          const fullUrl = `${mapConfig.url}?${mapConfig.params(lat, lng, address, origin, originAddress)}&src=Average90`;
+          console.log('[地图协议] 生成链接:', fullUrl);
+    
+          const { default: open } = await import('open');
+          return open(fullUrl);
+      } catch (error) {
+          console.error('打开地图失败:', error);
+          throw new Error(`打开地图失败: ${error.message}`);
+      }
+      process.exit(0)
+  }
+
+  /**
+   * IP定位 - 获取当前设备位置
+   * @returns {Promise<Object>} 定位结果
+   */
+  async getCurrentLocation() {
+    try {
+      const response = await axios.get(`${this.baseUrl}/ip`, {
+        params: { key: this.apiKey, type: 4 }
+      });
+  
+      if (response.data.status === '1') {
+        // 修复地址拼接问题
+        const district = response.data.district || '';
+        return {
+          success: true,
+          formatted_address: `${response.data.province}${response.data.city}${district}`,
+          province: response.data.province,
+          city: response.data.city,
+          adcode: response.data.adcode,
+          rectangle: response.data.rectangle
+        };
+      } else {
+        return {
+          success: false,
+          error: '定位失败',
+          info: response.data.info
+        };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
 }
 
 export default AmapClient;

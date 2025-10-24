@@ -144,15 +144,31 @@ console.log(result.tolls); // 通行费(元)
 console.log(result.steps); // 详细导航步骤
 ```
 
-## 🤖 AI智能路线规划
+# 🤖 AI智能路线规划系统
 
-### 功能说明
+基于高德地图API与DeepSeek大模型，实现自然语言驱动的智能出行解决方案。
 
-AI智能路线规划结合了DeepSeek AI模型和高德地图API,让你可以用自然语言描述行程,系统会自动:
-1. 使用AI理解你的输入,提取起点和终点
-2. 调用高德地图API进行地理编码
-3. 规划最佳驾车路线
-4. 生成友好的AI路线摘要
+## 核心功能
+
+### 🗺️ 智能路线规划
+- **自然语言理解**：使用<mcsymbol name="AIService.parseLocationInput" filename="aiService.js" path="src/aiService.js" startline="10" type="function"></mcsymbol>解析用户输入
+- **自动定位**：集成<mcsymbol name="AmapClient.getCurrentLocation" filename="amapClient.js" path="src/amapClient.js" startline="346" type="function"></mcsymbol>实现IP定位
+- **多策略导航**：支持躲避拥堵/最短路径等驾驶策略
+
+### 🚀 主要特性
+1. **智能地址解析**
+   - 自动补全省市信息（"西湖" → "杭州西湖风景名胜区"）
+   - 支持模糊查询（"那个陆家嘴的高楼" → "上海东方明珠"）
+   
+2. **全流程自动化**
+   ```mermaid
+   graph TD
+   A[自然语言输入] --> B(AI解析地址)
+   B --> C(地理编码)
+   C --> D(路线规划)
+   D --> E(AI摘要生成)
+   E --> F(自动打开地图)
+   ```
 
 ### 配置DeepSeek API Key
 
