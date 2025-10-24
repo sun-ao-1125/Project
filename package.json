@@ -1,0 +1,17 @@
+{
+  "name": "amap-mcp-client",
+  "version": "1.0.0",
+  "description": "高德地图MCP客户端调用示例",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "keywords": ["amap", "mcp", "gaode", "map"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "axios": "^1.7.7"
+  }
+}
