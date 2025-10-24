@@ -47,7 +47,7 @@ npm install
 npm start
 
 # 运行AI智能路线规划
-npm run ai-route
+npm run navigate  # 输入自然语言指令,如: "从北京到上海的路线"
 ```
 
 ## 项目结构
