@@ -4,3 +4,8 @@ websockets>=12.0
 anthropic>=0.18.0
 httpx>=0.25.0
 mcp>=0.9.0
+
+# 语音识别相关依赖
+SpeechRecognition>=3.8.1
+pyaudio>=0.2.11
+vosk>=0.3.44

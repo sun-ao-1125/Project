@@ -10,6 +10,8 @@ import json
 from ai_provider import create_ai_provider
 from mcp_client import create_mcp_client, TransportType, AuthType
 from amap_mcp_client import create_amap_client
+# 导入新的语音识别模块
+from voice_recognizer import get_voice_input
 
 async def get_location_coordinates(location_name: str, mcp_client) -> dict:
     """
@@ -144,8 +146,21 @@ async def main():
         print("  export AMAP_MCP_SERVER_URL='http://localhost:3000'")
         return
     
-    print("Enter your navigation request (e.g., '从北京到上海', '我要从广州去深圳'):")
-    user_input = input("> ").strip()
+    # 添加语音输入选项
+    print("请选择输入方式:")
+    print("1. 文本输入")
+    print("2. 语音输入")
+    input_type = input("请选择 (1/2): ").strip()
+    
+    user_input = None
+    
+    if input_type == "2":
+        # 使用语音输入
+        user_input = await get_voice_input()
+    else:
+        # 默认使用文本输入
+        print("Enter your navigation request (e.g., '从北京到上海', '我要从广州去深圳'):")
+        user_input = input("> ").strip()
     
     if not user_input:
         print("No input provided.")
