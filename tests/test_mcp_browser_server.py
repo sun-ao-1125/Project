@@ -2,7 +2,7 @@
 import pytest
 import json
 from unittest.mock import Mock, patch, AsyncMock
-from mcp_browser_server import handle_list_tools, handle_call_tool
+from map_navigator.mcp_browser_server import handle_list_tools, handle_call_tool
 
 
 class TestHandleListTools:

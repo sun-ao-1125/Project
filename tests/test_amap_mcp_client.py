@@ -3,7 +3,7 @@ import pytest
 import json
 import os
 from unittest.mock import Mock, patch, AsyncMock
-from amap_mcp_client import (
+from map_navigator.amap_mcp_client import (
     AmapMCPClient,
     MockAmapMCPClient,
     create_amap_client

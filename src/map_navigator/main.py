@@ -7,11 +7,11 @@ Coordinates between AI, MCP server, and browser control MCP server.
 import asyncio
 import os
 import json
-from ai_provider import create_ai_provider
-from mcp_client import create_mcp_client, TransportType, AuthType
-from amap_mcp_client import create_amap_client
+from map_navigator.ai_provider import create_ai_provider
+from map_navigator.mcp_client import create_mcp_client, TransportType, AuthType
+from map_navigator.amap_mcp_client import create_amap_client
 # 导入新的语音识别模块
-from voice_recognizer import get_voice_input
+from map_navigator.voice_recognizer import get_voice_input
 
 async def get_location_coordinates(location_name: str, mcp_client) -> dict:
     """

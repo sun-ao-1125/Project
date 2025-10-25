@@ -2,7 +2,7 @@
 import pytest
 import uuid
 from unittest.mock import Mock, patch, AsyncMock
-from mcp_client import (
+from map_navigator.mcp_client import (
     TransportType,
     AuthType,
     MCPConfig,

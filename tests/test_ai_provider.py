@@ -3,7 +3,7 @@ import pytest
 import json
 import os
 from unittest.mock import Mock, patch, AsyncMock
-from ai_provider import (
+from map_navigator.ai_provider import (
     ClaudeProvider,
     OpenAICompatibleProvider,
     create_ai_provider
