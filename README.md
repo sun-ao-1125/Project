@@ -140,7 +140,7 @@ python -m ai_navigator.mcp_browser_server
   - OpenAI兼容API (包括七牛、OpenAI、Azure等)
 - **MCP协议**: Model Context Protocol
 - **地图服务**: 高德地图API
-- **编程语言**: Python 3.8+
+- **编程语言**: Python 3.10+
 
 ## 项目结构
 
