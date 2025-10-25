@@ -2,7 +2,7 @@
 import pytest
 import json
 from unittest.mock import Mock, patch, AsyncMock
-from map_navigator.main import (
+from ai_navigator.main import (
     get_location_coordinates,
     parse_navigation_request,
     open_browser_navigation,
@@ -196,7 +196,7 @@ class TestMain:
     
     @pytest.mark.asyncio
     async def test_main_missing_api_key(self):
-        with patch('map_navigator.main.create_ai_provider', side_effect=ValueError("API key missing")):
+        with patch('ai_navigator.main.create_ai_provider', side_effect=ValueError("API key missing")):
             with patch('builtins.print'):
                 await main()
     
@@ -225,8 +225,8 @@ class TestMain:
         mock_mcp_client.call_tool = AsyncMock(return_value=mock_result)
         mock_mcp_client.disconnect = AsyncMock()
         
-        with patch('map_navigator.main.create_ai_provider', return_value=mock_ai_provider):
-            with patch('map_navigator.main.create_mcp_client', new_callable=AsyncMock, return_value=mock_mcp_client):
+        with patch('ai_navigator.main.create_ai_provider', return_value=mock_ai_provider):
+            with patch('ai_navigator.main.create_mcp_client', new_callable=AsyncMock, return_value=mock_mcp_client):
                 with patch('builtins.input', side_effect=["1", "从北京到上海"]):
                     with patch('builtins.print'):
                         with patch('webbrowser.open'):
@@ -237,8 +237,8 @@ class TestMain:
     async def test_main_voice_input_selected(self):
         mock_ai_provider = Mock()
         
-        with patch('map_navigator.main.create_ai_provider', return_value=mock_ai_provider):
-            with patch('map_navigator.main.get_voice_input', new_callable=AsyncMock, return_value=None):
+        with patch('ai_navigator.main.create_ai_provider', return_value=mock_ai_provider):
+            with patch('ai_navigator.main.get_voice_input', new_callable=AsyncMock, return_value=None):
                 with patch('builtins.input', return_value="2"):
                     with patch('builtins.print'):
                         await main()
@@ -247,7 +247,7 @@ class TestMain:
     async def test_main_empty_input(self):
         mock_ai_provider = Mock()
         
-        with patch('map_navigator.main.create_ai_provider', return_value=mock_ai_provider):
+        with patch('ai_navigator.main.create_ai_provider', return_value=mock_ai_provider):
             with patch('builtins.input', side_effect=["1", ""]):
                 with patch('builtins.print'):
                     await main()
@@ -263,8 +263,8 @@ class TestMain:
         mock_amap_client.__aenter__ = AsyncMock(return_value=mock_amap_client)
         mock_amap_client.__aexit__ = AsyncMock()
         
-        with patch('map_navigator.main.create_ai_provider', return_value=mock_ai_provider):
-            with patch('map_navigator.main.create_amap_client', return_value=mock_amap_client):
+        with patch('ai_navigator.main.create_ai_provider', return_value=mock_ai_provider):
+            with patch('ai_navigator.main.create_amap_client', return_value=mock_amap_client):
                 with patch('builtins.input', side_effect=["1", "invalid input"]):
                     with patch('builtins.print'):
                         with patch.dict('os.environ', {}, clear=True):
@@ -286,8 +286,8 @@ class TestMain:
             "latitude": 39.916527
         })
         
-        with patch('map_navigator.main.create_ai_provider', return_value=mock_ai_provider):
-            with patch('map_navigator.main.create_amap_client', return_value=mock_amap_client):
+        with patch('ai_navigator.main.create_ai_provider', return_value=mock_ai_provider):
+            with patch('ai_navigator.main.create_amap_client', return_value=mock_amap_client):
                 with patch('builtins.input', side_effect=["1", "从北京到上海"]):
                     with patch('builtins.print'):
                         with patch('webbrowser.open'):

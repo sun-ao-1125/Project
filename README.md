@@ -89,7 +89,7 @@ pip install -e .
 ### 4. 运行程序
 
 ```bash
-python -m map_navigator.main
+python -m ai_navigator.main
 ```
 
 ### 5. 运行测试
@@ -117,7 +117,7 @@ pytest --cov=src --cov-report=html
 浏览器控制MCP服务器可以独立运行并被其他MCP客户端调用:
 
 ```bash
-python -m map_navigator.mcp_browser_server
+python -m ai_navigator.mcp_browser_server
 ```
 
 ### MCP Server工具列表
@@ -147,7 +147,7 @@ python -m map_navigator.mcp_browser_server
 ```
 .
 ├── src/
-│   └── map_navigator/      # 源代码包
+│   └── ai_navigator/      # 源代码包
 │       ├── __init__.py
 │       ├── main.py                 # 主应用程序
 │       ├── ai_provider.py          # AI提供商抽象层
@@ -226,7 +226,7 @@ export OPENAI_MODEL="your-model-name"
 ```bash
 $ export AI_PROVIDER="anthropic"
 $ export ANTHROPIC_API_KEY="sk-ant-..."
-$ python -m map_navigator.main
+$ python -m ai_navigator.main
 === AI Map Navigator (MCP Architecture) ===
 
 Using AI provider: anthropic
@@ -260,7 +260,7 @@ Navigation URL: https://uri.amap.com/navigation?from=116.397128,39.916527&to=121
 $ export AI_PROVIDER="openai"
 $ export OPENAI_API_KEY="your-qiniu-key"
 $ export OPENAI_BASE_URL="https://api.qiniu.com/v1"
-$ python -m map_navigator.main
+$ python -m ai_navigator.main
 === AI Map Navigator (MCP Architecture) ===
 
 Using AI provider: openai

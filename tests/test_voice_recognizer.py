@@ -3,14 +3,14 @@ import pytest
 import asyncio
 import json
 from unittest.mock import Mock, patch, AsyncMock, MagicMock
-from map_navigator.voice_recognizer import VoiceRecognizer, get_voice_input
+from ai_navigator.voice_recognizer import VoiceRecognizer, get_voice_input
 import speech_recognition as sr
 
 
 class TestVoiceRecognizer:
     
     def test_init_with_local_recognition(self):
-        with patch('map_navigator.voice_recognizer.vosk'):
+        with patch('ai_navigator.voice_recognizer.vosk'):
             recognizer = VoiceRecognizer(language='zh-CN', use_local=True)
             
             assert recognizer.language == 'zh-CN'
@@ -182,7 +182,7 @@ class TestGetVoiceInput:
     
     @pytest.mark.asyncio
     async def test_get_voice_input_success(self):
-        with patch('map_navigator.voice_recognizer.VoiceRecognizer') as mock_class:
+        with patch('ai_navigator.voice_recognizer.VoiceRecognizer') as mock_class:
             mock_instance = Mock()
             mock_instance.recognize_speech = AsyncMock(return_value="从上海到杭州")
             mock_class.return_value = mock_instance
@@ -194,7 +194,7 @@ class TestGetVoiceInput:
     
     @pytest.mark.asyncio
     async def test_get_voice_input_returns_none(self):
-        with patch('map_navigator.voice_recognizer.VoiceRecognizer') as mock_class:
+        with patch('ai_navigator.voice_recognizer.VoiceRecognizer') as mock_class:
             mock_instance = Mock()
             mock_instance.recognize_speech = AsyncMock(return_value=None)
             mock_class.return_value = mock_instance
