@@ -1,0 +1,74 @@
+From: AI Navigator Team <ai@navigator.local>
+Date: Sat, 25 Oct 2025 15:31:00 +0000
+Subject: [PATCH] Add workflow to remind updating CLAUDE.md on structure changes
+
+This patch adds a GitHub Actions workflow that creates an issue reminder
+when project structure changes are detected, prompting maintainers to
+review and update the CLAUDE.md documentation accordingly.
+
+---
+ .github/workflows/update-claude-md.yml | 52 ++++++++++++++++++++++++++
+ 1 file changed, 52 insertions(+)
+ create mode 100644 .github/workflows/update-claude-md.yml
+
+diff --git a/.github/workflows/update-claude-md.yml b/.github/workflows/update-claude-md.yml
+new file mode 100644
+index 0000000..1234567
+--- /dev/null
++++ b/.github/workflows/update-claude-md.yml
+@@ -0,0 +1,52 @@
++name: Update CLAUDE.md Reminder
++
++on:
++  push:
++    branches: [ main ]
++    paths:
++      - 'src/**/*.py'
++      - 'tests/**/*.py'
++      - 'pyproject.toml'
++      - 'requirements.txt'
++      - '.github/workflows/*.yml'
++      - 'README.md'
++
++jobs:
++  check-documentation:
++    name: Check if CLAUDE.md needs update
++    runs-on: ubuntu-latest
++    
++    steps:
++      - name: Checkout code
++        uses: actions/checkout@v4
++        with:
++          fetch-depth: 2
++      
++      - name: Check for structural changes
++        id: check_changes
++        run: |
++          # 检查是否有新文件添加或文件删除
++          ADDED_FILES=$(git diff --name-only --diff-filter=A HEAD~1 HEAD | grep -E '\.(py|yml|yaml|toml)$' || true)
++          DELETED_FILES=$(git diff --name-only --diff-filter=D HEAD~1 HEAD | grep -E '\.(py|yml|yaml|toml)$' || true)
++          
++          if [ -n "$ADDED_FILES" ] || [ -n "$DELETED_FILES" ]; then
++            echo "structural_change=true" >> $GITHUB_OUTPUT
++            echo "### 检测到结构性变化:" >> $GITHUB_STEP_SUMMARY
++            [ -n "$ADDED_FILES" ] && echo "**新增文件:**" >> $GITHUB_STEP_SUMMARY && echo "$ADDED_FILES" >> $GITHUB_STEP_SUMMARY
++            [ -n "$DELETED_FILES" ] && echo "**删除文件:**" >> $GITHUB_STEP_SUMMARY && echo "$DELETED_FILES" >> $GITHUB_STEP_SUMMARY
++          else
++            echo "structural_change=false" >> $GITHUB_OUTPUT
++          fi
++      
++      - name: Create reminder issue
++        if: steps.check_changes.outputs.structural_change == 'true'
++        uses: actions/github-script@v7
++        with:
++          script: |
++            await github.rest.issues.create({
++              owner: context.repo.owner,
++              repo: context.repo.repo,
++              title: '📝 提醒：CLAUDE.md 可能需要更新',
++              body: '检测到项目结构变化（文件新增或删除），请检查 CLAUDE.md 是否需要更新以反映最新的项目架构和模块信息。\n\n相关提交: ' + context.sha,
++              labels: ['documentation', 'maintenance']
++            });
+-- 
+2.40.0
+
