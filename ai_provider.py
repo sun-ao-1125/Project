@@ -93,7 +93,8 @@ Only return the JSON, no other text."""
                 json=payload
             )
             response.raise_for_status()
-            data = response.json()
+            data = await response.aread()
+            data = json.loads(data.decode('utf-8'))
             
             response_text = data["choices"][0]["message"]["content"].strip()
             return self._parse_json_response(response_text)

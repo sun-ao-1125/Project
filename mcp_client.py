@@ -13,6 +13,8 @@ from enum import Enum
 from dataclasses import dataclass, field
 import asyncio
 from abc import ABC, abstractmethod
+import httpx
+import uuid
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -21,6 +23,7 @@ logger = logging.getLogger(__name__)
 class TransportType(Enum):
     STDIO = "stdio"
     HTTP_SSE = "http_sse"
+    HTTP_STREAM = "streamable_http"
     WEBSOCKET = "websocket"
 
 
@@ -93,12 +96,13 @@ class HTTPSSETransport(MCPTransport):
     
     def __init__(self, config: MCPConfig):
         self.config = config
-        self.session = None
+        self.client = None
         self.connected = False
     
     async def connect(self) -> bool:
         try:
             logger.info(f"Connecting to MCP server via HTTP+SSE: {self.config.server_url}")
+            self.client = httpx.AsyncClient(timeout=self.config.timeout)
             self.connected = True
             return True
         except Exception as e:
@@ -106,12 +110,14 @@ class HTTPSSETransport(MCPTransport):
             return False
     
     async def disconnect(self) -> None:
-        if self.session:
-            self.connected = False
-            logger.info("Disconnected from MCP server")
+        if self.client:
+            await self.client.aclose()
+            self.client = None
+        self.connected = False
+        logger.info("Disconnected from MCP server")
     
     async def send_request(self, method: str, params: Dict[str, Any]) -> Dict[str, Any]:
-        if not self.connected:
+        if not self.connected or not self.client:
             raise ConnectionError("Not connected to server")
         
         request = {
@@ -122,13 +128,144 @@ class HTTPSSETransport(MCPTransport):
         }
         
         logger.debug(f"Sending request: {method}")
-        return {}
+        
+        try:
+            # Prepare headers
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream"
+            }
+            
+            # Add authentication if configured
+            if self.config.auth_type == AuthType.BEARER and self.config.auth_token:
+                headers["Authorization"] = f"Bearer {self.config.auth_token}"
+            elif self.config.auth_type == AuthType.API_KEY and self.config.auth_token:
+                headers["X-API-Key"] = self.config.auth_token
+            
+            # Send HTTP POST request
+            response = await self.client.post(
+                self.config.server_url,
+                json=request,
+                headers=headers
+            )
+            
+            response.raise_for_status()
+            result = response.json()
+            
+            # Handle JSON-RPC response
+            if "result" in result:
+                return result["result"]
+            elif "error" in result:
+                error = result["error"]
+                raise Exception(f"Server error: {error.get('message', 'Unknown error')}")
+            else:
+                return result
+                
+        except httpx.HTTPError as e:
+            logger.error(f"HTTP request failed: {e}")
+            raise ConnectionError(f"HTTP request failed: {e}")
+        except Exception as e:
+            logger.error(f"Request failed: {e}")
+            raise
     
     async def receive_event(self) -> Optional[Dict[str, Any]]:
+        # For HTTP+SSE, we don't receive events in this implementation
+        # This would require Server-Sent Events handling
         return None
     
     def _generate_request_id(self) -> str:
-        import uuid
+        return str(uuid.uuid4())
+
+
+class StreamableHTTPTransport(MCPTransport):
+    
+    def __init__(self, config: MCPConfig):
+        self.config = config
+        self.client = None
+        self.connected = False
+    
+    async def connect(self) -> bool:
+        try:
+            logger.info(f"Connecting to MCP server via Streamable HTTP: {self.config.server_url}")
+            self.client = httpx.AsyncClient(timeout=self.config.timeout)
+            self.connected = True
+            return True
+        except Exception as e:
+            logger.error(f"Connection failed: {e}")
+            return False
+    
+    async def disconnect(self) -> None:
+        if self.client:
+            await self.client.aclose()
+            self.client = None
+        self.connected = False
+        logger.info("Disconnected from MCP server")
+    
+    async def send_request(self, method: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        if not self.connected or not self.client:
+            raise ConnectionError("Not connected to server")
+        
+        request = {
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params,
+            "id": self._generate_request_id()
+        }
+        
+        logger.debug(f"Sending streamable request: {method}")
+        
+        try:
+            # Prepare headers for streamable HTTP
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive"
+            }
+            
+            # Add authentication if configured
+            if self.config.auth_type == AuthType.BEARER and self.config.auth_token:
+                headers["Authorization"] = f"Bearer {self.config.auth_token}"
+            elif self.config.auth_type == AuthType.API_KEY and self.config.auth_token:
+                headers["X-API-Key"] = self.config.auth_token
+            
+            # Send HTTP POST request with streaming support
+            async with self.client.stream(
+                "POST",
+                self.config.server_url,
+                json=request,
+                headers=headers
+            ) as response:
+                response.raise_for_status()
+                
+                # Handle streaming response
+                content = b""
+                async for chunk in response.aiter_bytes():
+                    content += chunk
+                
+                result = json.loads(content.decode('utf-8'))
+                
+                # Handle JSON-RPC response
+                if "result" in result:
+                    return result["result"]
+                elif "error" in result:
+                    error = result["error"]
+                    raise Exception(f"Server error: {error.get('message', 'Unknown error')}")
+                else:
+                    return result
+                
+        except httpx.HTTPError as e:
+            logger.error(f"Streamable HTTP request failed: {e}")
+            raise ConnectionError(f"Streamable HTTP request failed: {e}")
+        except Exception as e:
+            logger.error(f"Request failed: {e}")
+            raise
+    
+    async def receive_event(self) -> Optional[Dict[str, Any]]:
+        # For streamable HTTP, events are handled in the response stream
+        return None
+    
+    def _generate_request_id(self) -> str:
         return str(uuid.uuid4())
 
 
@@ -142,6 +279,8 @@ class StdioTransport(MCPTransport):
     async def connect(self) -> bool:
         try:
             logger.info("Connecting to MCP server via stdio")
+            # For stdio transport, we would need to start a subprocess
+            # This is a placeholder implementation
             self.connected = True
             return True
         except Exception as e:
@@ -150,8 +289,11 @@ class StdioTransport(MCPTransport):
     
     async def disconnect(self) -> None:
         if self.process:
-            self.connected = False
-            logger.info("Disconnected from MCP server")
+            self.process.terminate()
+            await self.process.wait()
+            self.process = None
+        self.connected = False
+        logger.info("Disconnected from MCP server")
     
     async def send_request(self, method: str, params: Dict[str, Any]) -> Dict[str, Any]:
         if not self.connected:
@@ -165,13 +307,14 @@ class StdioTransport(MCPTransport):
         }
         
         logger.debug(f"Sending request: {method}")
+        # For stdio transport, we would write to stdin and read from stdout
+        # This is a placeholder implementation
         return {}
     
     async def receive_event(self) -> Optional[Dict[str, Any]]:
         return None
     
     def _generate_request_id(self) -> str:
-        import uuid
         return str(uuid.uuid4())
 
 
@@ -185,6 +328,8 @@ class WebSocketTransport(MCPTransport):
     async def connect(self) -> bool:
         try:
             logger.info(f"Connecting to MCP server via WebSocket: {self.config.server_url}")
+            # For WebSocket transport, we would need to establish a WebSocket connection
+            # This is a placeholder implementation
             self.connected = True
             return True
         except Exception as e:
@@ -193,8 +338,10 @@ class WebSocketTransport(MCPTransport):
     
     async def disconnect(self) -> None:
         if self.websocket:
-            self.connected = False
-            logger.info("Disconnected from MCP server")
+            await self.websocket.close()
+            self.websocket = None
+        self.connected = False
+        logger.info("Disconnected from MCP server")
     
     async def send_request(self, method: str, params: Dict[str, Any]) -> Dict[str, Any]:
         if not self.connected:
@@ -208,13 +355,14 @@ class WebSocketTransport(MCPTransport):
         }
         
         logger.debug(f"Sending request: {method}")
+        # For WebSocket transport, we would send JSON over the WebSocket
+        # This is a placeholder implementation
         return {}
     
     async def receive_event(self) -> Optional[Dict[str, Any]]:
         return None
     
     def _generate_request_id(self) -> str:
-        import uuid
         return str(uuid.uuid4())
 
 
@@ -262,6 +410,7 @@ class MCPClient:
     def _create_transport(self) -> MCPTransport:
         transport_map = {
             TransportType.HTTP_SSE: HTTPSSETransport,
+            TransportType.HTTP_STREAM: StreamableHTTPTransport,
             TransportType.STDIO: StdioTransport,
             TransportType.WEBSOCKET: WebSocketTransport
         }
