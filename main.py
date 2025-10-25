@@ -102,11 +102,16 @@ async def open_browser_navigation(start_coords: dict, end_coords: dict):
     For now, we directly open the browser.
     """
     import webbrowser
+    import urllib.parse
+    
+    sname = urllib.parse.quote(start_coords['name'])
+    dname = urllib.parse.quote(end_coords['name'])
     
     url = (
         f"https://uri.amap.com/navigation?"
         f"from={start_coords['longitude']},{start_coords['latitude']}&"
         f"to={end_coords['longitude']},{end_coords['latitude']}&"
+        f"sname={sname}&dname={dname}&"
         f"mode=car&policy=1&src=ai-navigator&coordinate=gaode&callnative=0"
     )
     
