@@ -77,10 +77,10 @@ jobs:
 
       - name: Run tests with pytest
         run: |
-          pytest --verbose --cov=src --cov-report=xml --cov-report=term-missing
+          pytest --verbose --cov=src --cov-report=xml --cov-report=html --cov-report=term-missing
         continue-on-error: true
 
-      - name: Upload coverage reports
+      - name: Upload coverage reports to Codecov
         if: matrix.python-version == '3.11'
         uses: codecov/codecov-action@v4
         with:
@@ -88,6 +88,16 @@ jobs:
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: false
+
+      - name: Upload coverage reports as artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports-py${{ matrix.python-version }}
+          path: |
+            coverage.xml
+            htmlcov/
+          retention-days: 30
 
   build:
     name: Build
