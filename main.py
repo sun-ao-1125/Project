@@ -104,14 +104,15 @@ async def open_browser_navigation(start_coords: dict, end_coords: dict):
     import webbrowser
     import urllib.parse
     
+    # 确保正确编码起点和终点名称
     sname = urllib.parse.quote(start_coords['name'])
     dname = urllib.parse.quote(end_coords['name'])
     
+    # 构建符合高德地图API的URL，确保正确显示起点终点名称
     url = (
         f"https://uri.amap.com/navigation?"
-        f"from={start_coords['longitude']},{start_coords['latitude']}&"
-        f"to={end_coords['longitude']},{end_coords['latitude']}&"
-        f"sname={sname}&dname={dname}&"
+        f"from={start_coords['longitude']},{start_coords['latitude']},{sname}&"
+        f"to={end_coords['longitude']},{end_coords['latitude']},{dname}&"
         f"mode=car&policy=1&src=ai-navigator&coordinate=gaode&callnative=0"
     )
     
