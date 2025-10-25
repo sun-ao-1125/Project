@@ -6,7 +6,7 @@ with various MCP servers.
 """
 
 import asyncio
-from mcp_client import (
+from ai_navigator.mcp_client import (
     MCPClient,
     MCPConfig,
     TransportType,

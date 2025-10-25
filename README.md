@@ -80,13 +80,32 @@ export AMAP_API_KEY="your-amap-api-key"  # 可选，不设置将使用模拟数�
 - Azure OpenAI
 - 其他遵循OpenAI API标准的服务
 
-### 3. 运行程序
+### 3. 安装项目
 
 ```bash
-python main.py
+pip install -e .
 ```
 
-### 4. 输入导航请求
+### 4. 运行程序
+
+```bash
+python -m ai_navigator.main
+```
+
+### 5. 运行测试
+
+```bash
+# 运行所有测试
+pytest
+
+# 运行特定测试文件
+pytest tests/test_ai_provider.py
+
+# 查看测试覆盖率
+pytest --cov=src --cov-report=html
+```
+
+### 6. 输入导航请求
 
 支持多种自然语言格式:
 - "从北京到上海"
@@ -98,7 +117,7 @@ python main.py
 浏览器控制MCP服务器可以独立运行并被其他MCP客户端调用:
 
 ```bash
-python mcp_browser_server.py
+python -m ai_navigator.mcp_browser_server
 ```
 
 ### MCP Server工具列表
@@ -127,10 +146,25 @@ python mcp_browser_server.py
 
 ```
 .
-├── main.py                 # 主应用程序
-├── ai_provider.py          # AI提供商抽象层
-├── amap_mcp_client.py      # 高德地图MCP客户端
-├── mcp_browser_server.py   # 浏览器控制MCP服务器
+├── src/
+│   └── ai_navigator/      # 源代码包
+│       ├── __init__.py
+│       ├── main.py                 # 主应用程序
+│       ├── ai_provider.py          # AI提供商抽象层
+│       ├── amap_mcp_client.py      # 高德地图MCP客户端
+│       ├── mcp_client.py           # 通用MCP客户端
+│       ├── mcp_browser_server.py   # 浏览器控制MCP服务器
+│       └── voice_recognizer.py     # 语音识别模块
+├── tests/                  # 测试文件
+│   ├── __init__.py
+│   ├── conftest.py
+│   ├── test_main.py
+│   ├── test_ai_provider.py
+│   ├── test_amap_mcp_client.py
+│   ├── test_mcp_client.py
+│   ├── test_mcp_browser_server.py
+│   └── test_voice_recognizer.py
+├── pyproject.toml          # 项目配置
 ├── requirements.txt        # Python依赖
 └── README.md              # 项目文档
 ```
@@ -192,7 +226,7 @@ export OPENAI_MODEL="your-model-name"
 ```bash
 $ export AI_PROVIDER="anthropic"
 $ export ANTHROPIC_API_KEY="sk-ant-..."
-$ python main.py
+$ python -m ai_navigator.main
 === AI Map Navigator (MCP Architecture) ===
 
 Using AI provider: anthropic
@@ -226,7 +260,7 @@ Navigation URL: https://uri.amap.com/navigation?from=116.397128,39.916527&to=121
 $ export AI_PROVIDER="openai"
 $ export OPENAI_API_KEY="your-qiniu-key"
 $ export OPENAI_BASE_URL="https://api.qiniu.com/v1"
-$ python main.py
+$ python -m ai_navigator.main
 === AI Map Navigator (MCP Architecture) ===
 
 Using AI provider: openai
