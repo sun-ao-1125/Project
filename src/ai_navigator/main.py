@@ -12,7 +12,7 @@ import logging
 from typing import Optional, Dict, Any
 from ai_navigator.config import load_config
 from ai_navigator.ai_provider import create_ai_provider
-from ai_navigator.mcp_client import create_mcp_client, TransportType, AuthType
+from ai_navigator.mcp_client import create_mcp_client, TransportType, AuthType, _sanitize_url
 from ai_navigator.amap_mcp_client import create_amap_client
 from ai_navigator.voice_recognizer import get_voice_input
 from ai_navigator.constants import (
