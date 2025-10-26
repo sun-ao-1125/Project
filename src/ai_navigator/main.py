@@ -462,10 +462,10 @@ async def open_browser_navigation(start_coords: dict, end_coords: dict, ai_provi
                 }
             )
             
-            if result.content and len(result.content) > 0:
-                content = result.content[0]
-                if hasattr(content, 'text'):
-                    data = json.loads(content.text)
+            if result.get("content") and len(result["content"]) > 0:
+                content = result["content"][0]
+                if isinstance(content, dict) and "text" in content:
+                    data = json.loads(content["text"])
                     return {
                         "success": data.get("success", False),
                         "message": data.get("message", "Navigation opened"),
