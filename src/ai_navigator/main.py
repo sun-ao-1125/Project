@@ -9,11 +9,23 @@ import asyncio
 import os
 import json
 import requests
+import logging
 from ai_navigator.ai_provider import create_ai_provider
 from ai_navigator.mcp_client import create_mcp_client, TransportType, AuthType
 from ai_navigator.amap_mcp_client import create_amap_client
 # 导入新的语音识别模块
 from ai_navigator.voice_recognizer import get_voice_input
+
+# 尝试导入SystemMCPManager，如果不存在则使用回退方案
+try:
+    from ai_navigator.system_mcp_manager import SystemMCPManager, TransportMethod
+    SYSTEM_MCP_AVAILABLE = True
+except ImportError:
+    SYSTEM_MCP_AVAILABLE = False
+    print("⚠️  SystemMCPManager not available, using fallback browser control")
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # 添加一个新函数用于通过IP获取当前位置
 # 修改get_current_location_by_ip函数，确保返回中文地名
@@ -194,11 +206,47 @@ async def parse_navigation_request(user_input: str, ai_provider) -> dict:
     """
     return await ai_provider.parse_navigation_request(user_input)
 
-async def open_browser_navigation(start_coords: dict, end_coords: dict):
+async def open_browser_navigation(start_coords: dict, end_coords: dict, mcp_manager=None):
     """
     Use browser control MCP server to open navigation.
-    For now, we directly open the browser.
+    Supports both MCP protocol and direct browser control as fallback.
     """
+    if mcp_manager and SYSTEM_MCP_AVAILABLE:
+        try:
+            result = await mcp_manager.call_tool(
+                server_name="browser",
+                tool_name="open_map_navigation",
+                arguments={
+                    "start_lng": start_coords['longitude'],
+                    "start_lat": start_coords['latitude'],
+                    "end_lng": end_coords['longitude'],
+                    "end_lat": end_coords['latitude'],
+                    "start_name": start_coords['name'],
+                    "end_name": end_coords.get('name', '终点')
+                }
+            )
+            
+            if result.content and len(result.content) > 0:
+                content = result.content[0]
+                if hasattr(content, 'text'):
+                    data = json.loads(content.text)
+                    return {
+                        "success": data.get("success", False),
+                        "message": data.get("message", "Navigation opened"),
+                        "url": data.get("url", "")
+                    }
+            
+            return {
+                "success": True,
+                "message": f"Navigation opened from {start_coords['name']} to {end_coords['name']}"
+            }
+        
+        except Exception as e:
+            logger.error(f"Failed to open browser navigation via MCP: {e}")
+            # Fall back to direct browser control
+            pass
+    
+    # Fallback to direct browser control
     import webbrowser
     import urllib.parse
     
@@ -224,7 +272,7 @@ async def open_browser_navigation(start_coords: dict, end_coords: dict):
 
 async def main():
     """Main application flow."""
-    print("=== AI Map Navigator (MCP Architecture) ===\n")
+    print("=== AI Map Navigator (MCP Architecture with Security) ===\n")
     
     try:
         ai_provider = create_ai_provider()
@@ -249,6 +297,34 @@ async def main():
         print("  # 或者自定义MCP服务器:")
         print("  export AMAP_MCP_SERVER_URL='http://localhost:3000'")
         return
+    
+    # Initialize MCP Manager if available
+    mcp_manager = None
+    if SYSTEM_MCP_AVAILABLE:
+        mcp_manager = SystemMCPManager(
+            enable_security=True,
+            enable_confirmation=False,
+            audit_log_file="mcp_audit.log"
+        )
+        
+        try:
+            print("\n[0/5] Initializing MCP system...")
+            browser_server_path = os.path.join(os.path.dirname(__file__), "mcp_browser_server.py")
+            success = await mcp_manager.register_server(
+                name="browser",
+                server_path=browser_server_path,
+                transport=TransportMethod.STDIO
+            )
+            
+            if success:
+                print("✓ Browser control MCP server registered")
+            else:
+                print("⚠️  Failed to register browser control MCP server, falling back to direct control")
+                mcp_manager = None
+        except Exception as e:
+            print(f"⚠️  Failed to initialize browser MCP: {e}")
+            print("   Falling back to direct browser control")
+            mcp_manager = None
     
     # 添加语音输入选项
     print("请选择输入方式:")
@@ -379,9 +455,10 @@ async def main():
         
         print(f"\n[5/5] Opening navigation in browser...")
         try:
-            result = await open_browser_navigation(start_coords, end_coords)
+            result = await open_browser_navigation(start_coords, end_coords, mcp_manager)
             print(f"✓ {result['message']}")
-            print(f"\nNavigation URL: {result['url']}")
+            if 'url' in result and result['url']:
+                print(f"\nNavigation URL: {result['url']}")
         except Exception as e:
             print(f"✗ Failed to open navigation: {e}")
             return
@@ -392,6 +469,9 @@ async def main():
         # Ensure proper cleanup
         if mcp_client:
             await mcp_client.disconnect()
+        
+        if mcp_manager:
+            await mcp_manager.disconnect_all()
 
 if __name__ == "__main__":
     asyncio.run(main())
