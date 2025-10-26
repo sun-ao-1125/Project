@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from mcp import StdioServerParameters
 import sys
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 

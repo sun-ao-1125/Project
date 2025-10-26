@@ -36,7 +36,7 @@ except ImportError:
     SYSTEM_MCP_AVAILABLE = False
     print("⚠️  SystemMCPManager not available, using fallback browser control")
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # Disable httpx INFO logging to prevent API keys in URLs from being logged
