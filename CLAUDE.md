@@ -221,8 +221,15 @@ def create_amap_client() -> AmapMCPClient:
 
 ### 6. 环境配置
 - **环境变量**: 所有配置通过环境变量管理
+- **.env 文件支持**: 使用 `python-dotenv` 自动加载 `.env` 文件
+- **优先级**: 系统环境变量 > `.env` 文件
 - **默认值**: 提供合理的默认值或 Mock 模式
 ```python
+# 在应用入口加载配置
+from ai_navigator.config import load_config
+load_config()  # 自动加载 .env 文件
+
+# 然后使用 os.getenv() 读取配置
 AI_PROVIDER = os.getenv("AI_PROVIDER", "anthropic")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
 ```
@@ -332,6 +339,7 @@ mcp>=0.9.0                  # MCP 协议实现
 SpeechRecognition>=3.8.1    # 语音识别
 pyaudio>=0.2.11             # 音频输入/输出
 vosk>=0.3.44                # 离线语音识别
+python-dotenv>=1.0.0        # .env 文件支持
 ```
 
 ### 开发依赖
@@ -509,7 +517,8 @@ jobs:
 - [ ] 插件化的 AI Provider
 - [ ] 可配置的 MCP Server 注册表
 - [ ] 完整的日志系统（替换 print）
-- [ ] 配置文件支持（YAML/TOML）
+- [x] .env 配置文件支持（已实现 v0.1.0）
+- [ ] 高级配置文件支持（YAML/TOML）
 
 ## 参考资源
 

@@ -48,23 +48,50 @@ pip install -r requirements.txt
 
 ### 2. 设置环境变量
 
-#### 方式一: 使用Anthropic Claude
+#### 方式一: 使用 .env 文件（推荐）
+
+1. 复制环境变量模板：
+```bash
+cp .env.example .env
+```
+
+2. 编辑 `.env` 文件，填入真实的 API 密钥：
+```bash
+# AI Provider 配置
+AI_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-your-api-key-here
+
+# 高德地图配置
+AMAP_MCP_SERVER_URL=https://mcp.amap.com/sse
+AMAP_API_KEY=your-amap-key-here
+```
+
+3. `.env` 文件会被自动加载，无需手动 export
+
+**注意**：`.env` 文件已被 `.gitignore` 排除，不会提交到版本控制
+
+#### 方式二: 使用系统环境变量
+
+##### 使用 Anthropic Claude
 
 ```bash
 export AI_PROVIDER="anthropic"
 export ANTHROPIC_API_KEY="your-anthropic-api-key"
 
 # 配置高德MCP服务器(二选一):
-# 方式1: 指定MCP服务器路径
+# 方式1: 指定MCP服务器URL
+export AMAP_MCP_SERVER_URL="https://mcp.amap.com/sse"
+
+# 方式2: 指定本地MCP服务器路径
 export AMAP_MCP_SERVER_PATH="/path/to/amap-mcp-server"
 
-# 方式2: 使用API Key(将使用Mock客户端)
+# 方式3: 使用API Key(将使用Mock客户端)
 export AMAP_API_KEY="your-amap-api-key"
 
 # 如果都不设置，将使用内置Mock客户端进行测试
 ```
 
-#### 方式二: 使用OpenAI兼容API (如七牛)
+##### 使用 OpenAI 兼容 API（如七牛）
 
 ```bash
 export AI_PROVIDER="openai"
@@ -79,6 +106,8 @@ export AMAP_API_KEY="your-amap-api-key"  # 可选，不设置将使用模拟数�
 - OpenAI官方API
 - Azure OpenAI
 - 其他遵循OpenAI API标准的服务
+
+**环境变量优先级**：系统环境变量 > `.env` 文件
 
 ### 3. 安装项目
 
