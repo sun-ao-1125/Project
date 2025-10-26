@@ -1,8 +1,5 @@
 """Tests for MCP File Server"""
 import pytest
-import tempfile
-import os
-from pathlib import Path
 
 
 class TestMCPFileServer:
