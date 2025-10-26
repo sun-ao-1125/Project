@@ -324,40 +324,111 @@ class WebSocketTransport(MCPTransport):
         self.config = config
         self.websocket = None
         self.connected = False
+        self.pending_responses: Dict[str, asyncio.Future] = {}
+        self.receive_task = None
     
     async def connect(self) -> bool:
         try:
+            import websockets
+            
             logger.info(f"Connecting to MCP server via WebSocket: {self.config.server_url}")
-            # For WebSocket transport, we would need to establish a WebSocket connection
-            # This is a placeholder implementation
+            
+            extra_headers = {}
+            if self.config.auth_type == AuthType.BEARER and self.config.auth_token:
+                extra_headers["Authorization"] = f"Bearer {self.config.auth_token}"
+            elif self.config.auth_type == AuthType.API_KEY and self.config.auth_token:
+                extra_headers["X-API-Key"] = self.config.auth_token
+            
+            self.websocket = await websockets.connect(
+                self.config.server_url,
+                extra_headers=extra_headers,
+                open_timeout=self.config.timeout
+            )
+            
             self.connected = True
+            self.receive_task = asyncio.create_task(self._receive_loop())
+            
+            logger.info("WebSocket connection established")
             return True
+            
         except Exception as e:
-            logger.error(f"Connection failed: {e}")
+            logger.error(f"WebSocket connection failed: {e}")
             return False
     
     async def disconnect(self) -> None:
+        if self.receive_task:
+            self.receive_task.cancel()
+            try:
+                await self.receive_task
+            except asyncio.CancelledError:
+                pass
+            self.receive_task = None
+        
         if self.websocket:
             await self.websocket.close()
             self.websocket = None
+        
         self.connected = False
         logger.info("Disconnected from MCP server")
     
     async def send_request(self, method: str, params: Dict[str, Any]) -> Dict[str, Any]:
-        if not self.connected:
+        if not self.connected or not self.websocket:
             raise ConnectionError("Not connected to server")
         
+        request_id = self._generate_request_id()
         request = {
             "jsonrpc": "2.0",
             "method": method,
             "params": params,
-            "id": self._generate_request_id()
+            "id": request_id
         }
         
-        logger.debug(f"Sending request: {method}")
-        # For WebSocket transport, we would send JSON over the WebSocket
-        # This is a placeholder implementation
-        return {}
+        logger.debug(f"Sending WebSocket request: {method}")
+        
+        future = asyncio.Future()
+        self.pending_responses[request_id] = future
+        
+        try:
+            await self.websocket.send(json.dumps(request))
+            
+            result = await asyncio.wait_for(
+                future,
+                timeout=self.config.timeout
+            )
+            
+            return result
+            
+        except asyncio.TimeoutError:
+            self.pending_responses.pop(request_id, None)
+            raise TimeoutError(f"Request timeout for method: {method}")
+        except Exception as e:
+            self.pending_responses.pop(request_id, None)
+            raise
+    
+    async def _receive_loop(self):
+        try:
+            async for message in self.websocket:
+                try:
+                    data = json.loads(message)
+                    
+                    if "id" in data:
+                        request_id = data["id"]
+                        if request_id in self.pending_responses:
+                            future = self.pending_responses.pop(request_id)
+                            if "error" in data:
+                                future.set_exception(Exception(data["error"]))
+                            else:
+                                future.set_result(data.get("result", {}))
+                    
+                except json.JSONDecodeError:
+                    logger.warning(f"Received invalid JSON: {message}")
+                except Exception as e:
+                    logger.error(f"Error processing message: {e}")
+        
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error(f"WebSocket receive loop error: {e}")
     
     async def receive_event(self) -> Optional[Dict[str, Any]]:
         return None
