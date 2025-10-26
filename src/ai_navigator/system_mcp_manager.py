@@ -262,7 +262,8 @@ class MCPServerConnection:
         """Connect via stdio transport (local process)"""
         try:
             # Support custom command from kwargs
-            command = self.kwargs.get("command", "python3")
+            command = self.kwargs.get("command", sys.executable)
+            logger.info(f"Using Python executable: {command}")
             
             # Create subprocess for MCP server
             self.process = await asyncio.create_subprocess_exec(

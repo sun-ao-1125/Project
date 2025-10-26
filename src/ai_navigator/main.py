@@ -580,10 +580,14 @@ async def main():
         try:
             print("\n[0/5] Initializing MCP system...")
             browser_server_path = os.path.join(os.path.dirname(__file__), "mcp_browser_server.py")
+            import sys
+            python_command = sys.executable
+            print(f"   Using Python executable: {python_command}")
             success = await mcp_manager.register_server(
                 name="browser",
                 server_path=browser_server_path,
-                transport=TransportMethod.STDIO
+                transport=TransportMethod.STDIO,
+                command=python_command
             )
             
             if success:
