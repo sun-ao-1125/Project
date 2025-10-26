@@ -478,11 +478,14 @@ async def parse_navigation_request(user_input: str, ai_provider) -> Dict[str, An
     """
     return await ai_provider.parse_navigation_request(user_input)
 
-async def open_browser_navigation(start_coords: dict, end_coords: dict, mcp_manager=None):
+async def open_browser_navigation(start_coords: dict, end_coords: dict, ai_provider, mcp_manager=None):
     """
-    Use browser control MCP server to open navigation.
+    Use AI provider to generate navigation URL and open in browser.
     Supports both MCP protocol and direct browser control as fallback.
     """
+    result_dict = await ai_provider.generate_navigation_url(start_coords, end_coords)
+    url = result_dict['url']
+    
     if mcp_manager and SYSTEM_MCP_AVAILABLE:
         try:
             result = await mcp_manager.call_tool(
@@ -494,7 +497,10 @@ async def open_browser_navigation(start_coords: dict, end_coords: dict, mcp_mana
                     "end_lng": end_coords['longitude'],
                     "end_lat": end_coords['latitude'],
                     "start_name": start_coords['name'],
-                    "end_name": end_coords.get('name', '终点')
+                    "end_name": end_coords.get('name', '终点'),
+                    "mode": result_dict.get('mode', 'car'),
+                    "policy": result_dict.get('policy', 1),
+                    "callnative": result_dict.get('callnative', 1)
                 }
             )
             
@@ -505,13 +511,12 @@ async def open_browser_navigation(start_coords: dict, end_coords: dict, mcp_mana
                     return {
                         "success": data.get("success", False),
                         "message": data.get("message", "Navigation opened"),
-                        "url": data.get("url", "")
+                        "url": data.get("url", url),
+                        "mode": result_dict.get('mode', 'car'),
+                        "policy": result_dict.get('policy', 1),
+                        "callnative": result_dict.get('callnative', 1),
+                        "description": result_dict.get('description', 'AI-generated navigation')
                     }
-            
-            return {
-                "success": True,
-                "message": f"Navigation opened from {start_coords['name']} to {end_coords['name']}"
-            }
         
         except Exception as e:
             logger.error(f"Failed to open browser navigation via MCP: {e}")
@@ -520,24 +525,16 @@ async def open_browser_navigation(start_coords: dict, end_coords: dict, mcp_mana
     
     # Fallback to direct browser control
     import webbrowser
-    import urllib.parse
-    
-    sname = urllib.parse.quote(start_coords['name'])
-    dname = urllib.parse.quote(end_coords['name'])
-    
-    url = (
-        f"https://uri.amap.com/navigation?"
-        f"from={start_coords['longitude']},{start_coords['latitude']},{sname}&"
-        f"to={end_coords['longitude']},{end_coords['latitude']},{dname}&"
-        f"mode=car&policy=1&src=ai-navigator&coordinate=gaode&callnative=0"
-    )
-    
     webbrowser.open(url)
     
     return {
         "success": True,
         "message": f"Navigation opened from {start_coords['name']} to {end_coords['name']}",
-        "url": url
+        "url": url,
+        "mode": result_dict.get('mode', 'car'),
+        "policy": result_dict.get('policy', 1),
+        "callnative": result_dict.get('callnative', 1),
+        "description": result_dict.get('description', 'AI-generated navigation')
     }
 
 
@@ -716,8 +713,10 @@ async def main():
         
         print(f"\n[5/5] Opening navigation in browser...")
         try:
-            result = await open_browser_navigation(start_coords, end_coords, mcp_manager)
+            result = await open_browser_navigation(start_coords, end_coords, ai_provider, mcp_manager)
             print(f"✓ {result['message']}")
+            print(f"   Mode: {result['mode']}, Policy: {result['policy']}, Native App: {'Yes' if result['callnative'] == 1 else 'No'}")
+            print(f"   AI Decision: {result['description']}")
             if 'url' in result and result['url']:
                 print(f"\nNavigation URL: {result['url']}")
         except Exception as e:

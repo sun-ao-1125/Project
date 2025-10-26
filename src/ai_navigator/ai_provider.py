@@ -61,6 +61,11 @@ class AIProvider(ABC):
             Extracted and structured information as a dictionary
         """
         pass
+    
+    @abstractmethod
+    async def generate_navigation_url(self, start_coords: dict, end_coords: dict, user_preference: str = None) -> dict:
+        """Generate navigation URL parameters based on coordinates and user preferences."""
+        pass
 
 
 class ClaudeProvider(AIProvider):
@@ -167,6 +172,61 @@ Only return the JSON, no other text."""
         
         response_text = message.content[0].text.strip()
         return self._parse_json_response(response_text)
+    
+    async def generate_navigation_url(self, start_coords: dict, end_coords: dict, user_preference: str = None) -> dict:
+        """Generate navigation URL using AI to determine best format and parameters."""
+        import urllib.parse
+        
+        prompt = f"""Generate navigation URL parameters for Amap (高德地图) based on these coordinates:
+
+Start: {start_coords['name']} ({start_coords['longitude']}, {start_coords['latitude']})
+End: {end_coords['name']} ({end_coords['longitude']}, {end_coords['latitude']})
+User preference: {user_preference or 'default'}
+
+Provide:
+1. navigation_mode: car/bus/walk/bike (default: car)
+2. route_policy: 0=fastest/1=no_highway/2=avoid_congestion/3=save_money/4=highway_first (default: 1)
+3. use_native_app: true/false (true for better experience, use callnative=1; false for web, use callnative=0)
+
+Return JSON format:
+{{
+  "mode": "car",
+  "policy": 1,
+  "callnative": 1,
+  "description": "Brief explanation of choices"
+}}
+
+Only return JSON, no other text."""
+
+        message = self.client.messages.create(
+            model=self.model,
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        
+        response_text = message.content[0].text.strip()
+        params = self._parse_json_response(response_text)
+        
+        sname = urllib.parse.quote(start_coords['name'])
+        dname = urllib.parse.quote(end_coords['name'])
+        
+        url = (
+            f"https://uri.amap.com/navigation?"
+            f"from={start_coords['longitude']},{start_coords['latitude']},{sname}&"
+            f"to={end_coords['longitude']},{end_coords['latitude']},{dname}&"
+            f"mode={params.get('mode', 'car')}&"
+            f"policy={params.get('policy', 1)}&"
+            f"src=ai-navigator&coordinate=gaode&"
+            f"callnative={params.get('callnative', 1)}"
+        )
+        
+        return {
+            "url": url,
+            "mode": params.get('mode', 'car'),
+            "policy": params.get('policy', 1),
+            "callnative": params.get('callnative', 1),
+            "description": params.get('description', 'AI-generated navigation parameters')
+        }
     
     def _parse_json_response(self, response_text: str) -> dict:
         try:
@@ -338,6 +398,79 @@ Only return the JSON, no other text."""
             
             response_text = data["choices"][0]["message"]["content"].strip()
             return self._parse_json_response(response_text)
+    
+    async def generate_navigation_url(self, start_coords: dict, end_coords: dict, user_preference: str = None) -> dict:
+        """Generate navigation URL using AI to determine best format and parameters."""
+        import urllib.parse
+        
+        prompt = f"""Generate navigation URL parameters for Amap (高德地图) based on these coordinates:
+
+Start: {start_coords['name']} ({start_coords['longitude']}, {start_coords['latitude']})
+End: {end_coords['name']} ({end_coords['longitude']}, {end_coords['latitude']})
+User preference: {user_preference or 'default'}
+
+Provide:
+1. navigation_mode: car/bus/walk/bike (default: car)
+2. route_policy: 0=fastest/1=no_highway/2=avoid_congestion/3=save_money/4=highway_first (default: 1)
+3. use_native_app: true/false (true for better experience, use callnative=1; false for web, use callnative=0)
+
+Return JSON format:
+{{
+  "mode": "car",
+  "policy": 1,
+  "callnative": 1,
+  "description": "Brief explanation of choices"
+}}
+
+Only return JSON, no other text."""
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "user", "content": prompt}
+            ],
+            "max_tokens": 300,
+            "temperature": 0.7
+        }
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{self.base_url}/chat/completions",
+                headers=headers,
+                json=payload
+            )
+            response.raise_for_status()
+            data = await response.aread()
+            data = json.loads(data.decode('utf-8'))
+            
+            response_text = data["choices"][0]["message"]["content"].strip()
+            params = self._parse_json_response(response_text)
+        
+        sname = urllib.parse.quote(start_coords['name'])
+        dname = urllib.parse.quote(end_coords['name'])
+        
+        url = (
+            f"https://uri.amap.com/navigation?"
+            f"from={start_coords['longitude']},{start_coords['latitude']},{sname}&"
+            f"to={end_coords['longitude']},{end_coords['latitude']},{dname}&"
+            f"mode={params.get('mode', 'car')}&"
+            f"policy={params.get('policy', 1)}&"
+            f"src=ai-navigator&coordinate=gaode&"
+            f"callnative={params.get('callnative', 1)}"
+        )
+        
+        return {
+            "url": url,
+            "mode": params.get('mode', 'car'),
+            "policy": params.get('policy', 1),
+            "callnative": params.get('callnative', 1),
+            "description": params.get('description', 'AI-generated navigation parameters')
+        }
     
     def _parse_json_response(self, response_text: str) -> dict:
         try:
