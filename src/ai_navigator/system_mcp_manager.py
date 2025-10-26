@@ -15,8 +15,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional, Dict, List, Any, Callable
 from dataclasses import dataclass, field
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
+from mcp import StdioServerParameters
 import sys
 
 logging.basicConfig(level=logging.INFO)
@@ -186,9 +185,8 @@ class MCPServerConnection:
         self.server_path = server_path
         self.transport = transport
         self.server_url = server_url
-        self.session: Optional[ClientSession] = None
-        self.stdio = None
-        self.write = None
+        self.process = None
+        self.request_id = 0
         self.connected = False
         self.tools_metadata: Dict[str, ToolMetadata] = {}
         self.kwargs = kwargs
@@ -213,20 +211,49 @@ class MCPServerConnection:
     
     async def _connect_stdio(self) -> bool:
         """Connect via stdio transport (local process)"""
-        server_params = StdioServerParameters(
-            command="python3",
-            args=[self.server_path],
-            env=os.environ.copy()
-        )
-        
-        stdio_transport = await stdio_client(server_params)
-        self.stdio, self.write = stdio_transport
-        self.session = ClientSession(self.stdio, self.write)
-        await self.session.initialize()
-        
-        self.connected = True
-        logger.info(f"Connected to {self.name} via stdio")
-        return True
+        try:
+            # Support custom command from kwargs
+            command = self.kwargs.get("command", "python3")
+            
+            # Create subprocess for MCP server
+            self.process = await asyncio.create_subprocess_exec(
+                command,
+                self.server_path,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=os.environ.copy()
+            )
+            
+            # Send JSON-RPC initialize request
+            init_request = {
+                "jsonrpc": "2.0",
+                "id": self._get_next_id(),
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {
+                        "name": "SystemMCPManager",
+                        "version": "1.0.0"
+                    }
+                }
+            }
+            
+            await self._send_request(init_request)
+            response = await self._receive_response()
+            
+            if not response or "result" not in response:
+                raise RuntimeError(f"Invalid initialize response: {response}")
+            
+            self.connected = True
+            logger.info(f"Connected to {self.name} via stdio")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to connect via stdio: {e}")
+            await self._cleanup_stdio()
+            return False
     
     async def _connect_http(self) -> bool:
         """Connect via HTTP transport (remote server)"""
@@ -243,43 +270,100 @@ class MCPServerConnection:
         logger.warning(f"Remote transport not yet implemented for {self.name}")
         return False
     
+    def _get_next_id(self) -> int:
+        """Get next request ID for JSON-RPC"""
+        self.request_id += 1
+        return self.request_id
+    
+    async def _send_request(self, request: Dict[str, Any]):
+        """Send JSON-RPC request to MCP server"""
+        if not self.process or not self.process.stdin:
+            raise RuntimeError("Process not available")
+        
+        message = json.dumps(request) + "\n"
+        self.process.stdin.write(message.encode())
+        await self.process.stdin.drain()
+        logger.debug(f"Sent request: {request}")
+    
+    async def _receive_response(self) -> Optional[Dict[str, Any]]:
+        """Receive JSON-RPC response from MCP server"""
+        if not self.process or not self.process.stdout:
+            raise RuntimeError("Process not available")
+        
+        try:
+            line = await self.process.stdout.readline()
+            if line:
+                response = json.loads(line.decode().strip())
+                logger.debug(f"Received response: {response}")
+                return response
+            else:
+                logger.warning("Received empty response")
+                return None
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to decode JSON response: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Error receiving response: {e}")
+            return None
+    
+    async def _cleanup_stdio(self):
+        """Clean up stdio connection resources"""
+        try:
+            if self.process:
+                self.process.terminate()
+                await self.process.wait()
+        except Exception as e:
+            logger.error(f"Error terminating process: {e}")
+        finally:
+            self.process = None
+            self.connected = False
+    
     async def disconnect(self):
         """Disconnect from MCP server"""
-        if self.session:
-            try:
-                await self.session.__aexit__(None, None, None)
-            except Exception as e:
-                logger.error(f"Error disconnecting from {self.name}: {e}")
-            finally:
-                self.session = None
-                self.connected = False
-                logger.info(f"Disconnected from {self.name}")
+        await self._cleanup_stdio()
+        logger.info(f"Disconnected from {self.name}")
     
     async def discover_tools(self) -> List[ToolMetadata]:
         """Discover available tools from the server"""
-        if not self.session:
+        if not self.connected:
             raise RuntimeError(f"Not connected to {self.name}")
         
         try:
-            tools = await self.session.list_tools()
+            # Send tools/list request
+            request = {
+                "jsonrpc": "2.0",
+                "id": self._get_next_id(),
+                "method": "tools/list",
+                "params": {}
+            }
+            
+            await self._send_request(request)
+            response = await self._receive_response()
+            
+            if not response or "result" not in response:
+                logger.error(f"Invalid tools/list response: {response}")
+                return []
+            
+            tools = response["result"].get("tools", [])
             
             for tool in tools:
-                permission_level = self._infer_permission_level(tool.name)
+                tool_name = tool.get("name", "")
+                permission_level = self._infer_permission_level(tool_name)
                 requires_confirmation = permission_level in [
                     PermissionLevel.DANGEROUS,
                     PermissionLevel.CRITICAL
                 ]
                 
                 tool_meta = ToolMetadata(
-                    name=tool.name,
+                    name=tool_name,
                     server_name=self.name,
-                    description=tool.description or "",
+                    description=tool.get("description", ""),
                     permission_level=permission_level,
                     requires_confirmation=requires_confirmation,
-                    parameters=tool.inputSchema if hasattr(tool, 'inputSchema') else {}
+                    parameters=tool.get("inputSchema", {})
                 )
                 
-                self.tools_metadata[tool.name] = tool_meta
+                self.tools_metadata[tool_name] = tool_meta
             
             logger.info(f"Discovered {len(self.tools_metadata)} tools from {self.name}")
             return list(self.tools_metadata.values())
@@ -312,14 +396,42 @@ class MCPServerConnection:
     
     async def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Any:
         """Call a tool on this server"""
-        if not self.session:
+        if not self.connected:
             raise RuntimeError(f"Not connected to {self.name}")
         
         if tool_name not in self.tools_metadata:
             raise ValueError(f"Tool '{tool_name}' not found in {self.name}")
         
-        result = await self.session.call_tool(tool_name, arguments=arguments)
-        return result
+        try:
+            # Send tools/call request
+            request = {
+                "jsonrpc": "2.0",
+                "id": self._get_next_id(),
+                "method": "tools/call",
+                "params": {
+                    "name": tool_name,
+                    "arguments": arguments
+                }
+            }
+            
+            await self._send_request(request)
+            response = await self._receive_response()
+            
+            if not response:
+                raise RuntimeError(f"No response received for tool call: {tool_name}")
+            
+            if "error" in response:
+                error = response["error"]
+                raise RuntimeError(f"Tool call error: {error.get('message', str(error))}")
+            
+            if "result" not in response:
+                raise RuntimeError(f"Invalid response format: {response}")
+            
+            return response["result"]
+            
+        except Exception as e:
+            logger.error(f"Failed to call tool {tool_name}: {e}")
+            raise
 
 
 class SystemMCPManager:
