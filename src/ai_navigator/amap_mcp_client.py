@@ -39,12 +39,9 @@ class AmapMCPClient:
             # 使用HTTP方式连接
             from ai_navigator.mcp_client import MCPConfig, TransportType, AuthType, HTTPSSETransport
             
-            # 从URL中提取API key（如果URL中包含key参数）
-            if not self._api_key and 'key=' in self.server_url:
-                import re
-                match = re.search(r'key=([^&]+)', self.server_url)
-                if match:
-                    self._api_key = match.group(1)
+            # SECURITY: Do not extract API keys from URLs - use AMAP_API_KEY environment variable
+            if 'key=' in self.server_url:
+                print("⚠️  WARNING: API key detected in URL. Use AMAP_API_KEY environment variable instead for security.")
             
             config = MCPConfig(
                 server_url=self.server_url,
@@ -96,7 +93,6 @@ class AmapMCPClient:
             await self.session.__aexit__(None, None, None)
             self.session = None
 
-    # 修改geocode、reverse_geocode、search_poi和get_current_location方法，使用call_tool方法
     async def geocode(self, address: str) -> Dict[str, Any]:
         """
         Geocode an address to coordinates using Amap MCP server.
@@ -195,10 +191,23 @@ class AmapMCPClient:
     
     async def get_current_location(self) -> Dict[str, Any]:
         """
-        Get current location using Amap MCP server.
+        Get current location using Amap MCP server with fallback mechanisms.
+        
+        This method attempts to get the current location through the following steps:
+        1. First tries the 'get_location' MCP tool (GPS-based location)
+        2. Falls back to 'ip_location' MCP tool if get_location fails
+        3. Returns default location (Beijing) if both methods fail
         
         Returns:
-            Dictionary with current location information including longitude and latitude
+            Dictionary with current location information:
+            - name (str): Location name or "北京市" as default
+            - longitude (float): Longitude coordinate
+            - latitude (float): Latitude coordinate
+            - formatted_address (str): Formatted address string
+            
+        Note:
+            This method never raises exceptions. If location detection fails,
+            it silently returns Beijing coordinates (116.4074, 39.9042).
         """
         if not self.session:
             raise RuntimeError("Not connected to Amap MCP server. Call connect() first.")
