@@ -20,7 +20,10 @@ class VoiceRecognizer:
         # 初始化Vosk（如果使用本地识别）
         if self.use_local:
             try:
+                # 设置环境变量以禁用Vosk/Kaldi日志输出
+                os.environ['KALDI_LOG'] = '0'
                 import vosk
+                vosk.SetLogLevel(-1)
                 self.vosk_available = True
                 print("本地语音识别引擎(Vosk)已初始化。")
             except ImportError:

@@ -111,7 +111,8 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
             import urllib.parse
             sname = urllib.parse.quote(start_name)
             dname = urllib.parse.quote(end_name)
-            url = f"https://uri.amap.com/navigation?from={start_lng},{start_lat}&to={end_lng},{end_lat}&sname={sname}&dname={dname}&mode=car&policy=1&src=myapp&coordinate=gaode&callnative=0"
+            # 修改URL格式，使其与ai_provider.py中的格式保持一致
+            url = f"https://uri.amap.com/navigation?from={start_lng},{start_lat},{sname}&to={end_lng},{end_lat},{dname}&mode=car&policy=1&src=ai-navigator&coordinate=gaode&callnative=0"
             
             webbrowser.open(url)
             
@@ -119,7 +120,7 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
                 type="text",
                 text=json.dumps({
                     "success": True,
-                    "message": f"Opened navigation from {start_name} to {end_name}",
+                    "message": f"已打开从{start_name}到{end_name}的导航",
                     "url": url
                 })
             )]
