@@ -4,14 +4,112 @@ AI Map Navigator - Main Application
 Coordinates between AI, MCP server, and browser control MCP server.
 """
 
+# 在导入部分添加requests库
 import asyncio
 import os
 import json
+import requests
 from ai_navigator.ai_provider import create_ai_provider
 from ai_navigator.mcp_client import create_mcp_client, TransportType, AuthType
 from ai_navigator.amap_mcp_client import create_amap_client
 # 导入新的语音识别模块
 from ai_navigator.voice_recognizer import get_voice_input
+
+# 添加一个新函数用于通过IP获取当前位置
+# 修改get_current_location_by_ip函数，确保返回中文地名
+async def get_current_location_by_ip() -> dict:
+    """
+    通过IP获取用户的当前地理位置
+    使用ipinfo.io提供的免费API，并将结果转换为中文显示
+    
+    Returns:
+        包含位置信息的字典
+    """
+    try:
+        # 调用ipinfo.io API获取IP位置信息
+        response = requests.get('https://ipinfo.io/json')
+        if response.status_code == 200:
+            data = response.json()
+            
+            # 解析位置信息
+            location_str = data.get('loc', '39.9042,116.4074')  # 默认北京坐标
+            lat, lng = map(float, location_str.split(','))
+            
+            # 城市名称中英文映射
+            city_translation = {
+                'Guangzhou': '广州',
+                'Beijing': '北京',
+                'Shanghai': '上海',
+                'Shenzhen': '深圳',
+                'Hangzhou': '杭州',
+                'Chengdu': '成都',
+                'Wuhan': '武汉',
+                'Xi\'an': '西安',
+                'Chongqing': '重庆',
+                'Nanjing': '南京'
+            }
+            
+            # 省份名称中英文映射
+            region_translation = {
+                'Guangdong': '广东',
+                'Beijing': '北京',
+                'Shanghai': '上海',
+                'Zhejiang': '浙江',
+                'Sichuan': '四川',
+                'Hubei': '湖北',
+                'Shaanxi': '陕西',
+                'Chongqing': '重庆',
+                'Jiangsu': '江苏'
+            }
+            
+            # 国家名称中英文映射
+            country_translation = {
+                'CN': '中国',
+                'US': '美国',
+                'JP': '日本',
+                'KR': '韩国',
+                'SG': '新加坡'
+            }
+            
+            # 获取并翻译地名
+            city = data.get('city', '未知城市')
+            city_cn = city_translation.get(city, city)  # 如果在映射表中找到则翻译，否则保留原名称
+            
+            region = data.get('region', '')
+            region_cn = region_translation.get(region, region)
+            
+            country = data.get('country', '')
+            country_cn = country_translation.get(country, country)
+            
+            # 构建完整的位置名称（中文）
+            location_name = f"{city_cn}"
+            if region_cn and region_cn != city_cn:
+                location_name = f"{region_cn}{location_name}"
+            
+            return {
+                "name": location_name,
+                "longitude": lng,
+                "latitude": lat,
+                "formatted_address": f"{country_cn}{region_cn}{city_cn}"
+            }
+        else:
+            # API调用失败时返回默认位置（北京）
+            print("⚠️  无法获取IP位置信息，使用默认位置")
+            return {
+                "name": "当前位置",
+                "longitude": 116.4074,
+                "latitude": 39.9042,
+                "formatted_address": "中国北京市"
+            }
+    except Exception as e:
+        print(f"⚠️  IP定位出错: {e}，使用默认位置")
+        # 异常情况下返回默认位置
+        return {
+            "name": "当前位置",
+            "longitude": 116.4074,
+            "latitude": 39.9042,
+            "formatted_address": "中国北京市"
+        }
 
 async def get_location_coordinates(location_name: str, mcp_client) -> dict:
     """
@@ -238,14 +336,31 @@ async def main():
             print(f"✗ Failed to parse request: {e}")
             return
         
-        print(f"\n[3/5] Getting coordinates for start location...")
+        # 修改获取起点坐标的逻辑中的输出信息，使用中文替代英文
+        print(f"\n[3/5] 获取起点位置坐标...")
         try:
-            if use_mcp and mcp_client:
-                start_coords = await get_location_coordinates(locations['start'], mcp_client)
+            # 检查起点是否为None或表示当前位置的关键词
+            start_location = locations['start']
+            
+            # 如果起点是None或者包含表示当前位置的关键词，使用IP定位
+            is_current_location = (start_location is None) or \
+                                 (isinstance(start_location, str) and \
+                                  any(keyword in start_location for keyword in 
+                                      ['当前位置', '我的位置', 'current location', 'Current Location']))
+            
+            if is_current_location:
+                # 使用IP获取真实地理位置
+                print("   获取您的实际位置...")
+                start_coords = await get_current_location_by_ip()
+                print(f"✓ 使用您的实际位置: {start_coords['name']} ({start_coords['longitude']}, {start_coords['latitude']})")
             else:
-                async with amap_client:
-                    start_coords = await amap_client.geocode(locations['start'])
-            print(f"✓ Start: {start_coords['name']} ({start_coords['longitude']}, {start_coords['latitude']})")
+                # 原有逻辑，通过MCP客户端或Amap客户端获取坐标
+                if use_mcp and mcp_client:
+                    start_coords = await get_location_coordinates(start_location, mcp_client)
+                else:
+                    async with amap_client:
+                        start_coords = await amap_client.geocode(start_location)
+                print(f"✓ Start: {start_coords['name']} ({start_coords['longitude']}, {start_coords['latitude']})")
         except Exception as e:
             print(f"✗ Failed to get start coordinates: {e}")
             return
