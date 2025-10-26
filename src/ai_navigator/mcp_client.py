@@ -20,6 +20,22 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def _mask_sensitive_value(value: str, show_chars: int = 4) -> str:
+    """
+    Mask sensitive values (API keys, tokens) for logging.
+    
+    Args:
+        value: The sensitive value to mask
+        show_chars: Number of characters to show at start/end
+        
+    Returns:
+        Masked string like 'sk-a...xyz'
+    """
+    if not value or len(value) <= show_chars * 2:
+        return '***'
+    return f"{value[:show_chars]}...{value[-show_chars:]}"
+
+
 class TransportType(Enum):
     STDIO = "stdio"
     HTTP_SSE = "http_sse"
@@ -683,7 +699,7 @@ class MCPClient:
     def set_auth_token(self, token: str, auth_type: AuthType = AuthType.BEARER) -> None:
         self.config.auth_token = token
         self.config.auth_type = auth_type
-        logger.info(f"Authentication token updated: {auth_type.value}")
+        logger.info(f"Authentication configured: {auth_type.value}")
     
     def get_server_info(self) -> Dict[str, Any]:
         return self.server_info

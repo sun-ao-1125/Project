@@ -22,6 +22,51 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_sensitive_data(data: Any, keys_to_mask: List[str] = None) -> Any:
+    """
+    Recursively sanitize sensitive data from dictionaries for logging.
+    
+    Args:
+        data: Data to sanitize (dict, list, or primitive)
+        keys_to_mask: List of key names to mask (case-insensitive)
+        
+    Returns:
+        Sanitized copy of the data
+    """
+    if keys_to_mask is None:
+        keys_to_mask = [
+            'api_key', 'apikey', 'key', 'token', 'password', 'secret',
+            'authorization', 'auth', 'credential', 'access_token',
+            'refresh_token', 'bearer', 'ak', 'sk'
+        ]
+    
+    def should_mask(key: str) -> bool:
+        key_lower = key.lower()
+        return any(sensitive in key_lower for sensitive in keys_to_mask)
+    
+    def mask_value(value: Any) -> str:
+        if isinstance(value, str):
+            if len(value) <= 8:
+                return '***'
+            return f"{value[:4]}...{value[-4:]}"
+        return '***'
+    
+    if isinstance(data, dict):
+        sanitized = {}
+        for key, value in data.items():
+            if should_mask(key):
+                sanitized[key] = mask_value(value)
+            elif isinstance(value, (dict, list)):
+                sanitized[key] = _sanitize_sensitive_data(value, keys_to_mask)
+            else:
+                sanitized[key] = value
+        return sanitized
+    elif isinstance(data, list):
+        return [_sanitize_sensitive_data(item, keys_to_mask) for item in data]
+    else:
+        return data
+
+
 class PermissionLevel(Enum):
     """Permission levels for MCP tools"""
     SAFE = "safe"
@@ -111,7 +156,8 @@ class SecurityValidator:
         print(f"Server: {tool_meta.server_name}")
         print(f"Tool: {tool_meta.name}")
         print(f"Description: {tool_meta.description}")
-        print(f"Arguments: {json.dumps(arguments, indent=2)}")
+        sanitized_args = _sanitize_sensitive_data(arguments)
+        print(f"Arguments: {json.dumps(sanitized_args, indent=2, ensure_ascii=False)}")
         print(f"\nAllow this operation? (yes/no/always): ", end='')
         
         response = input().strip().lower()
@@ -139,8 +185,11 @@ class AuditLogger:
     
     def log_call(self, entry: AuditLogEntry):
         """Log a tool call to the audit log"""
+        entry_dict = entry.__dict__.copy()
+        entry_dict['arguments'] = _sanitize_sensitive_data(entry_dict.get('arguments', {}))
+        
         with open(self.log_file, 'a') as f:
-            f.write(f"{json.dumps(entry.__dict__, ensure_ascii=False)}\n")
+            f.write(f"{json.dumps(entry_dict, ensure_ascii=False)}\n")
         
         logger.info(f"Audit: {entry.server_name}.{entry.tool_name} - {entry.result_status}")
     
@@ -283,7 +332,8 @@ class MCPServerConnection:
         message = json.dumps(request) + "\n"
         self.process.stdin.write(message.encode())
         await self.process.stdin.drain()
-        logger.debug(f"Sent request: {request}")
+        sanitized_request = _sanitize_sensitive_data(request)
+        logger.debug(f"Sent request: {sanitized_request}")
     
     async def _receive_response(self) -> Optional[Dict[str, Any]]:
         """Receive JSON-RPC response from MCP server"""
@@ -294,7 +344,8 @@ class MCPServerConnection:
             line = await self.process.stdout.readline()
             if line:
                 response = json.loads(line.decode().strip())
-                logger.debug(f"Received response: {response}")
+                sanitized_response = _sanitize_sensitive_data(response)
+                logger.debug(f"Received response: {sanitized_response}")
                 return response
             else:
                 logger.warning("Received empty response")

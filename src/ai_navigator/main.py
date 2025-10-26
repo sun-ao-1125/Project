@@ -135,8 +135,10 @@ async def get_location_coordinates_ai_driven(
             context=context
         )
         
-        print(f"   AI selected tool: {tool_decision['tool_name']}")
-        print(f"   Reasoning: {tool_decision['reasoning']}")
+        debug_mode = os.getenv("DEBUG", "").lower() == "true"
+        if debug_mode:
+            print(f"   AI selected tool: {tool_decision['tool_name']}")
+            print(f"   Reasoning: {tool_decision['reasoning']}")
         
         # Call the selected tool with AI-generated arguments
         result = await mcp_client.call_tool(
