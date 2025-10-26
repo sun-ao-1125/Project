@@ -7,7 +7,7 @@ Supports multiple AI providers: Anthropic Claude and OpenAI-compatible APIs
 import os
 import json
 from abc import ABC, abstractmethod
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 from anthropic import Anthropic
 import httpx
 
@@ -16,6 +16,50 @@ class AIProvider(ABC):
     @abstractmethod
     async def parse_navigation_request(self, user_input: str) -> dict:
         """Parse user's navigation request and extract locations."""
+        pass
+    
+    @abstractmethod
+    async def select_mcp_tool(
+        self,
+        user_intent: str,
+        available_tools: List[Dict[str, Any]],
+        context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Intelligently select the most appropriate MCP tool based on user intent.
+        
+        Args:
+            user_intent: Description of what the user wants to accomplish
+            available_tools: List of available MCP tools with their descriptions and parameters
+            context: Optional additional context (e.g., user preferences, location, etc.)
+        
+        Returns:
+            {
+                "tool_name": str,  # Name of the selected tool
+                "arguments": dict,  # Arguments to pass to the tool
+                "reasoning": str   # Explanation of why this tool was chosen
+            }
+        """
+        pass
+    
+    @abstractmethod
+    async def parse_mcp_response(
+        self,
+        raw_response: Dict[str, Any],
+        expected_info: str,
+        context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Parse and extract information from MCP tool response using AI understanding.
+        
+        Args:
+            raw_response: The raw response from an MCP tool
+            expected_info: Description of what information to extract
+            context: Optional context about what the information will be used for
+        
+        Returns:
+            Extracted and structured information as a dictionary
+        """
         pass
 
 
@@ -38,6 +82,86 @@ Only return the JSON, no other text."""
         message = self.client.messages.create(
             model=self.model,
             max_tokens=200,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        
+        response_text = message.content[0].text.strip()
+        return self._parse_json_response(response_text)
+    
+    async def select_mcp_tool(
+        self,
+        user_intent: str,
+        available_tools: List[Dict[str, Any]],
+        context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        tools_description = json.dumps(available_tools, indent=2, ensure_ascii=False)
+        context_str = json.dumps(context, ensure_ascii=False) if context else "None"
+        
+        prompt = f"""You are an intelligent tool selector. Based on the user's intent and available MCP tools, select the most appropriate tool and generate the correct arguments.
+
+User Intent: {user_intent}
+
+Available Tools:
+{tools_description}
+
+Context: {context_str}
+
+Analyze the intent and select the best tool. Return a JSON object with:
+- tool_name: The name of the selected tool
+- arguments: A dictionary of arguments for the tool
+- reasoning: Brief explanation of why you chose this tool
+
+Response format:
+{{
+  "tool_name": "selected_tool_name",
+  "arguments": {{"param1": "value1"}},
+  "reasoning": "explanation"
+}}
+
+Only return the JSON, no other text."""
+
+        message = self.client.messages.create(
+            model=self.model,
+            max_tokens=500,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        
+        response_text = message.content[0].text.strip()
+        return self._parse_json_response(response_text)
+    
+    async def parse_mcp_response(
+        self,
+        raw_response: Dict[str, Any],
+        expected_info: str,
+        context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        response_str = json.dumps(raw_response, indent=2, ensure_ascii=False)
+        context_str = json.dumps(context, ensure_ascii=False) if context else "None"
+        
+        prompt = f"""You are an intelligent response parser. Extract the requested information from the MCP tool response.
+
+MCP Tool Response:
+{response_str}
+
+Expected Information: {expected_info}
+
+Context: {context_str}
+
+Analyze the response and extract the requested information. Return a JSON object with the extracted data in a clean, structured format.
+
+Example for location coordinates:
+{{
+  "name": "location name",
+  "longitude": 116.123,
+  "latitude": 39.456,
+  "formatted_address": "full address"
+}}
+
+Only return the JSON, no other text."""
+
+        message = self.client.messages.create(
+            model=self.model,
+            max_tokens=500,
             messages=[{"role": "user", "content": prompt}]
         )
         
@@ -83,6 +207,122 @@ Only return the JSON, no other text."""
                 {"role": "user", "content": prompt}
             ],
             "max_tokens": 200,
+            "temperature": 0.7
+        }
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{self.base_url}/chat/completions",
+                headers=headers,
+                json=payload
+            )
+            response.raise_for_status()
+            data = await response.aread()
+            data = json.loads(data.decode('utf-8'))
+            
+            response_text = data["choices"][0]["message"]["content"].strip()
+            return self._parse_json_response(response_text)
+    
+    async def select_mcp_tool(
+        self,
+        user_intent: str,
+        available_tools: List[Dict[str, Any]],
+        context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        tools_description = json.dumps(available_tools, indent=2, ensure_ascii=False)
+        context_str = json.dumps(context, ensure_ascii=False) if context else "None"
+        
+        prompt = f"""You are an intelligent tool selector. Based on the user's intent and available MCP tools, select the most appropriate tool and generate the correct arguments.
+
+User Intent: {user_intent}
+
+Available Tools:
+{tools_description}
+
+Context: {context_str}
+
+Analyze the intent and select the best tool. Return a JSON object with:
+- tool_name: The name of the selected tool
+- arguments: A dictionary of arguments for the tool
+- reasoning: Brief explanation of why you chose this tool
+
+Response format:
+{{
+  "tool_name": "selected_tool_name",
+  "arguments": {{"param1": "value1"}},
+  "reasoning": "explanation"
+}}
+
+Only return the JSON, no other text."""
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "user", "content": prompt}
+            ],
+            "max_tokens": 500,
+            "temperature": 0.7
+        }
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{self.base_url}/chat/completions",
+                headers=headers,
+                json=payload
+            )
+            response.raise_for_status()
+            data = await response.aread()
+            data = json.loads(data.decode('utf-8'))
+            
+            response_text = data["choices"][0]["message"]["content"].strip()
+            return self._parse_json_response(response_text)
+    
+    async def parse_mcp_response(
+        self,
+        raw_response: Dict[str, Any],
+        expected_info: str,
+        context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        response_str = json.dumps(raw_response, indent=2, ensure_ascii=False)
+        context_str = json.dumps(context, ensure_ascii=False) if context else "None"
+        
+        prompt = f"""You are an intelligent response parser. Extract the requested information from the MCP tool response.
+
+MCP Tool Response:
+{response_str}
+
+Expected Information: {expected_info}
+
+Context: {context_str}
+
+Analyze the response and extract the requested information. Return a JSON object with the extracted data in a clean, structured format.
+
+Example for location coordinates:
+{{
+  "name": "location name",
+  "longitude": 116.123,
+  "latitude": 39.456,
+  "formatted_address": "full address"
+}}
+
+Only return the JSON, no other text."""
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "user", "content": prompt}
+            ],
+            "max_tokens": 500,
             "temperature": 0.7
         }
         

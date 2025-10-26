@@ -123,17 +123,96 @@ async def get_current_location_by_ip() -> dict:
             "formatted_address": "中国北京市"
         }
 
-async def get_location_coordinates(location_name: str, mcp_client) -> dict:
+async def get_location_coordinates_ai_driven(
+    location_name: str, 
+    mcp_client, 
+    ai_provider,
+    is_current_location: bool = False
+) -> dict:
     """
-    Get coordinates for a location using MCP server.
+    AI-driven location coordinate lookup using MCP tools.
+    The AI intelligently selects the best MCP tool and parses the response.
     
     Args:
         location_name: Name of the location to geocode
         mcp_client: MCP client instance
+        ai_provider: AI provider for intelligent tool selection
+        is_current_location: Whether this is the user's current location
         
     Returns:
         Dictionary with location coordinates
     """
+    try:
+        # Get available MCP tools
+        tools = mcp_client.list_tools()
+        
+        # Prepare tool information for AI
+        available_tools = []
+        for tool in tools:
+            tool_info = {
+                "name": tool.name,
+                "description": tool.description if hasattr(tool, 'description') else f"Tool: {tool.name}",
+                "parameters": {}
+            }
+            if hasattr(tool, 'inputSchema'):
+                tool_info["parameters"] = tool.inputSchema
+            available_tools.append(tool_info)
+        
+        # Let AI select the most appropriate tool
+        context = {
+            "is_current_location": is_current_location,
+            "location_type": "current" if is_current_location else "destination"
+        }
+        
+        tool_decision = await ai_provider.select_mcp_tool(
+            user_intent=f"Get coordinates for location: {location_name}",
+            available_tools=available_tools,
+            context=context
+        )
+        
+        print(f"   AI selected tool: {tool_decision['tool_name']}")
+        print(f"   Reasoning: {tool_decision['reasoning']}")
+        
+        # Call the selected tool with AI-generated arguments
+        result = await mcp_client.call_tool(
+            tool_decision["tool_name"],
+            tool_decision["arguments"]
+        )
+        
+        # Let AI parse the response
+        parsed_data = await ai_provider.parse_mcp_response(
+            raw_response=result,
+            expected_info="Extract location name, longitude, latitude, and formatted address",
+            context={"original_location_name": location_name}
+        )
+        
+        return parsed_data
+        
+    except Exception as e:
+        raise ValueError(f"Failed to get coordinates for '{location_name}': {str(e)}")
+
+
+async def get_location_coordinates(location_name: str, mcp_client, ai_provider=None) -> dict:
+    """
+    Get coordinates for a location using MCP server.
+    Uses AI-driven tool selection if ai_provider is provided, otherwise falls back to hardcoded logic.
+    
+    Args:
+        location_name: Name of the location to geocode
+        mcp_client: MCP client instance
+        ai_provider: Optional AI provider for intelligent tool selection
+        
+    Returns:
+        Dictionary with location coordinates
+    """
+    # Try AI-driven approach first if AI provider is available
+    if ai_provider:
+        try:
+            return await get_location_coordinates_ai_driven(location_name, mcp_client, ai_provider)
+        except Exception as e:
+            print(f"   AI-driven lookup failed, falling back to hardcoded logic: {e}")
+    
+    # Fallback to hardcoded logic
     try:
         # Try different geocoding tools based on what's available
         tools = mcp_client.list_tools()
@@ -432,7 +511,7 @@ async def main():
             else:
                 # 原有逻辑，通过MCP客户端或Amap客户端获取坐标
                 if use_mcp and mcp_client:
-                    start_coords = await get_location_coordinates(start_location, mcp_client)
+                    start_coords = await get_location_coordinates(start_location, mcp_client, ai_provider)
                 else:
                     async with amap_client:
                         start_coords = await amap_client.geocode(start_location)
@@ -444,7 +523,7 @@ async def main():
         print(f"\n[4/5] Getting coordinates for end location...")
         try:
             if use_mcp and mcp_client:
-                end_coords = await get_location_coordinates(locations['end'], mcp_client)
+                end_coords = await get_location_coordinates(locations['end'], mcp_client, ai_provider)
             else:
                 async with amap_client:
                     end_coords = await amap_client.geocode(locations['end'])
