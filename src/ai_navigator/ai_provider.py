@@ -13,6 +13,25 @@ import httpx
 
 
 class AIProvider(ABC):
+    def __init__(self):
+        self.context_history: List[Dict[str, str]] = []
+        self.context_summary: str = ""
+    
+    def set_context(self, context_history: List[Dict[str, str]], context_summary: str = ""):
+        """
+        Set conversation context for AI interactions.
+        
+        Args:
+            context_history: List of previous messages with role and content
+            context_summary: Summary of current session context
+        """
+        self.context_history = context_history
+        self.context_summary = context_summary
+    
+    def clear_context(self):
+        """Clear conversation context."""
+        self.context_history = []
+        self.context_summary = ""
     @abstractmethod
     async def parse_navigation_request(self, user_input: str) -> dict:
         """Parse user's navigation request and extract locations."""
@@ -70,24 +89,32 @@ class AIProvider(ABC):
 
 class ClaudeProvider(AIProvider):
     def __init__(self, api_key: str):
+        super().__init__()
         self.client = Anthropic(api_key=api_key)
         self.model = "claude-3-5-sonnet-20241022"
     
     async def parse_navigation_request(self, user_input: str) -> dict:
+        context_str = f"\n\nContext:\n{self.context_summary}" if self.context_summary else ""
+        
         prompt = f"""Parse this navigation request and extract the start location (A) and end location (B).
 Return a JSON object with 'start' and 'end' keys.
 
-User request: {user_input}
+User request: {user_input}{context_str}
 
 Response format:
 {{"start": "location A", "end": "location B"}}
 
 Only return the JSON, no other text."""
 
+        messages = []
+        if self.context_history:
+            messages.extend(self.context_history[-3:])
+        messages.append({"role": "user", "content": prompt})
+
         message = self.client.messages.create(
             model=self.model,
             max_tokens=200,
-            messages=[{"role": "user", "content": prompt}]
+            messages=messages
         )
         
         response_text = message.content[0].text.strip()
@@ -241,15 +268,18 @@ Only return JSON, no other text."""
 
 class OpenAICompatibleProvider(AIProvider):
     def __init__(self, api_key: str, base_url: str, model: str):
+        super().__init__()
         self.api_key = api_key
         self.base_url = base_url.rstrip('/')
         self.model = model
     
     async def parse_navigation_request(self, user_input: str) -> dict:
+        context_str = f"\n\nContext:\n{self.context_summary}" if self.context_summary else ""
+        
         prompt = f"""Parse this navigation request and extract the start location (A) and end location (B).
 Return a JSON object with 'start' and 'end' keys.
 
-User request: {user_input}
+User request: {user_input}{context_str}
 
 Response format:
 {{"start": "location A", "end": "location B"}}
@@ -261,11 +291,14 @@ Only return the JSON, no other text."""
             "Content-Type": "application/json"
         }
         
+        messages = []
+        if self.context_history:
+            messages.extend(self.context_history[-3:])
+        messages.append({"role": "user", "content": prompt})
+        
         payload = {
             "model": self.model,
-            "messages": [
-                {"role": "user", "content": prompt}
-            ],
+            "messages": messages,
             "max_tokens": 200,
             "temperature": 0.7
         }

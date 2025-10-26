@@ -15,6 +15,16 @@ from ai_navigator.ai_provider import create_ai_provider
 from ai_navigator.mcp_client import create_mcp_client, TransportType, AuthType
 from ai_navigator.amap_mcp_client import create_amap_client
 from ai_navigator.voice_recognizer import get_voice_input
+from ai_navigator.constants import (
+    DEFAULT_LOCATION,
+    CITY_TRANSLATIONS,
+    REGION_TRANSLATIONS,
+    COUNTRY_TRANSLATIONS,
+    CURRENT_LOCATION_KEYWORDS,
+    GPS_PARAM_OPTIONS,
+    get_step_label
+)
+from ai_navigator.ai_context import AIContext
 
 load_config()
 
@@ -46,54 +56,19 @@ async def get_current_location_by_ip() -> dict:
             data = response.json()
             
             # 解析位置信息
-            location_str = data.get('loc', '39.9042,116.4074')  # 默认北京坐标
+            default_loc = f"{DEFAULT_LOCATION['latitude']},{DEFAULT_LOCATION['longitude']}"
+            location_str = data.get('loc', default_loc)
             lat, lng = map(float, location_str.split(','))
-            
-            # 城市名称中英文映射
-            city_translation = {
-                'Guangzhou': '广州',
-                'Beijing': '北京',
-                'Shanghai': '上海',
-                'Shenzhen': '深圳',
-                'Hangzhou': '杭州',
-                'Chengdu': '成都',
-                'Wuhan': '武汉',
-                'Xi\'an': '西安',
-                'Chongqing': '重庆',
-                'Nanjing': '南京'
-            }
-            
-            # 省份名称中英文映射
-            region_translation = {
-                'Guangdong': '广东',
-                'Beijing': '北京',
-                'Shanghai': '上海',
-                'Zhejiang': '浙江',
-                'Sichuan': '四川',
-                'Hubei': '湖北',
-                'Shaanxi': '陕西',
-                'Chongqing': '重庆',
-                'Jiangsu': '江苏'
-            }
-            
-            # 国家名称中英文映射
-            country_translation = {
-                'CN': '中国',
-                'US': '美国',
-                'JP': '日本',
-                'KR': '韩国',
-                'SG': '新加坡'
-            }
             
             # 获取并翻译地名
             city = data.get('city', '未知城市')
-            city_cn = city_translation.get(city, city)  # 如果在映射表中找到则翻译，否则保留原名称
+            city_cn = CITY_TRANSLATIONS.get(city, city)
             
             region = data.get('region', '')
-            region_cn = region_translation.get(region, region)
+            region_cn = REGION_TRANSLATIONS.get(region, region)
             
             country = data.get('country', '')
-            country_cn = country_translation.get(country, country)
+            country_cn = COUNTRY_TRANSLATIONS.get(country, country)
             
             # 构建完整的位置名称（中文）
             location_name = f"{city_cn}"
@@ -107,23 +82,11 @@ async def get_current_location_by_ip() -> dict:
                 "formatted_address": f"{country_cn}{region_cn}{city_cn}"
             }
         else:
-            # API调用失败时返回默认位置（北京）
             print("⚠️  无法获取IP位置信息，使用默认位置")
-            return {
-                "name": "当前位置",
-                "longitude": 116.4074,
-                "latitude": 39.9042,
-                "formatted_address": "中国北京市"
-            }
+            return DEFAULT_LOCATION.copy()
     except Exception as e:
         print(f"⚠️  IP定位出错: {e}，使用默认位置")
-        # 异常情况下返回默认位置
-        return {
-            "name": "当前位置",
-            "longitude": 116.4074,
-            "latitude": 39.9042,
-            "formatted_address": "中国北京市"
-        }
+        return DEFAULT_LOCATION.copy()
 
 async def get_location_coordinates_ai_driven(
     location_name: str, 
@@ -345,11 +308,7 @@ async def get_gps_location(mcp_client, tool_names: list) -> Optional[Dict[str, A
     
     debug_mode = os.getenv("DEBUG", "").lower() == "true"
     
-    gps_params_options = [
-        {"address": "current_location"},
-        {"address": ""},
-        {"get_current_location": True}
-    ]
+    gps_params_options = GPS_PARAM_OPTIONS
     
     for params in gps_params_options:
         if debug_mode:
@@ -468,11 +427,7 @@ async def get_current_location_coordinates(mcp_client, tool_names: list, amap_cl
         return coords
     
     print("   ⚠️  定位失败，使用默认位置（北京）")
-    return {
-        "longitude": 116.4074,
-        "latitude": 39.9042,
-        "name": "北京市"
-    }
+    return DEFAULT_LOCATION.copy()
 
 
 async def parse_navigation_request(user_input: str, ai_provider) -> Dict[str, Any]:
@@ -545,6 +500,8 @@ async def main():
     """Main application flow."""
     print("=== AI Map Navigator (MCP Architecture with Security) ===\n")
     
+    ai_context = AIContext()
+    
     try:
         ai_provider = create_ai_provider()
         provider_type = os.getenv("AI_PROVIDER", "anthropic")
@@ -611,7 +568,9 @@ async def main():
         print("No input provided.")
         return
     
-    print(f"\n[1/5] Connecting to geocoding service...")
+    ai_context.add_user_message(user_input)
+    
+    print(f"\n{get_step_label('CONNECT')} Connecting to geocoding service...")
     
     mcp_client = None
     amap_client = None
@@ -664,22 +623,26 @@ async def main():
         print("✓ Using Amap MCP client (fallback mode)")
     
     try:
-        print(f"\n[2/5] Parsing request with AI...")
+        print(f"\n{get_step_label('PARSE')} Parsing request with AI...")
         try:
+            ai_provider.set_context(
+                ai_context.get_conversation_history(),
+                ai_context.get_context_summary()
+            )
             locations = await parse_navigation_request(user_input, ai_provider)
             print(f"✓ Parsed: {locations['start']} → {locations['end']}")
+            ai_context.add_assistant_message(f"Parsed locations: {locations['start']} → {locations['end']}")
         except Exception as e:
             print(f"✗ Failed to parse request: {e}")
             return
         
-        print(f"\n[3/5] 获取起点位置坐标...")
+        print(f"\n{get_step_label('START_COORDS')} 获取起点位置坐标...")
         try:
             start_location = locations['start']
             
             is_current_location = (start_location is None) or \
                                  (isinstance(start_location, str) and \
-                                  any(keyword in start_location for keyword in 
-                                      ['当前位置', '我的位置', 'current location', 'Current Location']))
+                                  any(keyword in start_location for keyword in CURRENT_LOCATION_KEYWORDS))
             
             if amap_client is None:
                 amap_client = create_amap_client()
@@ -698,11 +661,12 @@ async def main():
                         start_coords = await amap_client.geocode(start_location)
             
             print(f"✓ Start: {start_coords['name']} ({start_coords['longitude']}, {start_coords['latitude']})")
+            ai_context.set_start_location(start_coords)
         except Exception as e:
             print(f"✗ Failed to get start coordinates: {e}")
             return
         
-        print(f"\n[4/5] Getting coordinates for end location...")
+        print(f"\n{get_step_label('END_COORDS')} Getting coordinates for end location...")
         try:
             if use_mcp and mcp_client:
                 end_coords = await get_location_coordinates(locations['end'], mcp_client, ai_provider)
@@ -710,11 +674,12 @@ async def main():
                 async with amap_client:
                     end_coords = await amap_client.geocode(locations['end'])
             print(f"✓ End: {end_coords['name']} ({end_coords['longitude']}, {end_coords['latitude']})")
+            ai_context.set_end_location(end_coords)
         except Exception as e:
             print(f"✗ Failed to get end coordinates: {e}")
             return
         
-        print(f"\n[5/5] Opening navigation in browser...")
+        print(f"\n{get_step_label('OPEN_BROWSER')} Opening navigation in browser...")
         try:
             result = await open_browser_navigation(start_coords, end_coords, ai_provider, mcp_manager)
             print(f"✓ {result['message']}")
