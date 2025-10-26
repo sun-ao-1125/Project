@@ -17,6 +17,7 @@ dependencies = [
     "SpeechRecognition>=3.8.1",
     "pyaudio>=0.2.11",
     "vosk>=0.3.44",
+    "python-dotenv>=1.0.0",
 ]
 
 [project.optional-dependencies]
