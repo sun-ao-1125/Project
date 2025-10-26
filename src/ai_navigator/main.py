@@ -12,7 +12,7 @@ import logging
 from typing import Optional, Dict, Any
 from ai_navigator.config import load_config
 from ai_navigator.ai_provider import create_ai_provider
-from ai_navigator.mcp_client import create_mcp_client, TransportType, AuthType
+from ai_navigator.mcp_client import create_mcp_client, TransportType, AuthType, _sanitize_url
 from ai_navigator.amap_mcp_client import create_amap_client
 from ai_navigator.voice_recognizer import get_voice_input
 from ai_navigator.constants import (
@@ -36,8 +36,52 @@ except ImportError:
     SYSTEM_MCP_AVAILABLE = False
     print("⚠️  SystemMCPManager not available, using fallback browser control")
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
+
+# Disable httpx INFO logging to prevent API keys in URLs from being logged
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
+
+def _sanitize_url(url: str) -> str:
+    """
+    Sanitize URL by masking sensitive query parameters (keys, tokens, etc.).
+    
+    Args:
+        url: The URL to sanitize
+        
+    Returns:
+        Sanitized URL with masked sensitive parameters
+    """
+    if not url:
+        return url
+    
+    try:
+        from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+        
+        parsed = urlparse(url)
+        if not parsed.query:
+            return url
+        
+        params = parse_qs(parsed.query, keep_blank_values=True)
+        
+        sensitive_params = ['key', 'api_key', 'apikey', 'token', 'access_token', 
+                          'secret', 'password', 'auth', 'authorization', 'ak', 'sk']
+        
+        sanitized_params = {}
+        for key, values in params.items():
+            key_lower = key.lower()
+            if any(sensitive in key_lower for sensitive in sensitive_params):
+                sanitized_params[key] = ['***']
+            else:
+                sanitized_params[key] = values
+        
+        sanitized_query = urlencode(sanitized_params, doseq=True)
+        sanitized = parsed._replace(query=sanitized_query)
+        
+        return urlunparse(sanitized)
+    except Exception:
+        return url
 
 # 添加一个新函数用于通过IP获取当前位置
 # 修改get_current_location_by_ip函数，确保返回中文地名
@@ -135,8 +179,10 @@ async def get_location_coordinates_ai_driven(
             context=context
         )
         
-        print(f"   AI selected tool: {tool_decision['tool_name']}")
-        print(f"   Reasoning: {tool_decision['reasoning']}")
+        debug_mode = os.getenv("DEBUG", "").lower() == "true"
+        if debug_mode:
+            print(f"   AI selected tool: {tool_decision['tool_name']}")
+            print(f"   Reasoning: {tool_decision['reasoning']}")
         
         # Call the selected tool with AI-generated arguments
         result = await mcp_client.call_tool(
@@ -582,7 +628,7 @@ async def main():
             print("⚠️  AMAP_MCP_SERVER_URL not set, falling back to Amap MCP client...")
             use_mcp = False
         else:
-            print(f"   Using MCP server: {server_url}")
+            print(f"   Using MCP server: {_sanitize_url(server_url)}")
             if "sse" in server_url.lower():
                 transport_type = TransportType.HTTP_SSE
             elif "stream" in server_url.lower():

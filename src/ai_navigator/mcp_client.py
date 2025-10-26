@@ -16,8 +16,68 @@ from abc import ABC, abstractmethod
 import httpx
 import uuid
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
+
+# Disable httpx INFO logging to prevent API keys in URLs from being logged
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
+
+def _mask_sensitive_value(value: str, show_chars: int = 4) -> str:
+    """
+    Mask sensitive values (API keys, tokens) for logging.
+    
+    Args:
+        value: The sensitive value to mask
+        show_chars: Number of characters to show at start/end
+        
+    Returns:
+        Masked string like 'sk-a...xyz'
+    """
+    if not value or len(value) <= show_chars * 2:
+        return '***'
+    return f"{value[:show_chars]}...{value[-show_chars:]}"
+
+
+def _sanitize_url(url: str) -> str:
+    """
+    Sanitize URL by masking sensitive query parameters (keys, tokens, etc.).
+    
+    Args:
+        url: The URL to sanitize
+        
+    Returns:
+        Sanitized URL with masked sensitive parameters
+    """
+    if not url:
+        return url
+    
+    try:
+        from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+        
+        parsed = urlparse(url)
+        if not parsed.query:
+            return url
+        
+        params = parse_qs(parsed.query, keep_blank_values=True)
+        
+        sensitive_params = ['key', 'api_key', 'apikey', 'token', 'access_token', 
+                          'secret', 'password', 'auth', 'authorization', 'ak', 'sk']
+        
+        sanitized_params = {}
+        for key, values in params.items():
+            key_lower = key.lower()
+            if any(sensitive in key_lower for sensitive in sensitive_params):
+                sanitized_params[key] = ['***']
+            else:
+                sanitized_params[key] = values
+        
+        sanitized_query = urlencode(sanitized_params, doseq=True)
+        sanitized = parsed._replace(query=sanitized_query)
+        
+        return urlunparse(sanitized)
+    except Exception:
+        return url
 
 
 class TransportType(Enum):
@@ -101,7 +161,7 @@ class HTTPSSETransport(MCPTransport):
     
     async def connect(self) -> bool:
         try:
-            logger.info(f"Connecting to MCP server via HTTP+SSE: {self.config.server_url}")
+            logger.info(f"Connecting to MCP server via HTTP+SSE: {_sanitize_url(self.config.server_url)}")
             self.client = httpx.AsyncClient(timeout=self.config.timeout)
             self.connected = True
             return True
@@ -186,7 +246,7 @@ class StreamableHTTPTransport(MCPTransport):
     
     async def connect(self) -> bool:
         try:
-            logger.info(f"Connecting to MCP server via Streamable HTTP: {self.config.server_url}")
+            logger.info(f"Connecting to MCP server via Streamable HTTP: {_sanitize_url(self.config.server_url)}")
             self.client = httpx.AsyncClient(timeout=self.config.timeout)
             self.connected = True
             return True
@@ -331,7 +391,7 @@ class WebSocketTransport(MCPTransport):
         try:
             import websockets
             
-            logger.info(f"Connecting to MCP server via WebSocket: {self.config.server_url}")
+            logger.info(f"Connecting to MCP server via WebSocket: {_sanitize_url(self.config.server_url)}")
             
             extra_headers = {}
             if self.config.auth_type == AuthType.BEARER and self.config.auth_token:
@@ -683,7 +743,7 @@ class MCPClient:
     def set_auth_token(self, token: str, auth_type: AuthType = AuthType.BEARER) -> None:
         self.config.auth_token = token
         self.config.auth_type = auth_type
-        logger.info(f"Authentication token updated: {auth_type.value}")
+        logger.info(f"Authentication configured: {auth_type.value}")
     
     def get_server_info(self) -> Dict[str, Any]:
         return self.server_info
