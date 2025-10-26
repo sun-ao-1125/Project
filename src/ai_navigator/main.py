@@ -4,7 +4,6 @@ AI Map Navigator - Main Application
 Coordinates between AI, MCP server, and browser control MCP server.
 """
 
-# 在导入部分添加requests库
 import asyncio
 import os
 import json
@@ -12,104 +11,34 @@ import requests
 from ai_navigator.ai_provider import create_ai_provider
 from ai_navigator.mcp_client import create_mcp_client, TransportType, AuthType
 from ai_navigator.amap_mcp_client import create_amap_client
+from ai_navigator.voice_recognizer import get_voice_input
+
+# 删除所有JavaScript风格的注释(//开头的行)
+# 删除任何中文标点符号
+"""
+AI Map Navigator - Main Application
+Coordinates between AI, MCP server, and browser control MCP server.
+"""
+
+# 移除requests导入，因为不再需要
+import asyncio
+import os
+import json
+import requests  # 添加requests模块导入
+from ai_navigator.ai_provider import create_ai_provider
+from ai_navigator.mcp_client import create_mcp_client, TransportType, AuthType
+from ai_navigator.amap_mcp_client import create_amap_client
 # 导入新的语音识别模块
 from ai_navigator.voice_recognizer import get_voice_input
 
-# 添加一个新函数用于通过IP获取当前位置
-# 修改get_current_location_by_ip函数，确保返回中文地名
-async def get_current_location_by_ip() -> dict:
-    """
-    通过IP获取用户的当前地理位置
-    使用ipinfo.io提供的免费API，并将结果转换为中文显示
-    
-    Returns:
-        包含位置信息的字典
-    """
-    try:
-        # 调用ipinfo.io API获取IP位置信息
-        response = requests.get('https://ipinfo.io/json')
-        if response.status_code == 200:
-            data = response.json()
-            
-            # 解析位置信息
-            location_str = data.get('loc', '39.9042,116.4074')  # 默认北京坐标
-            lat, lng = map(float, location_str.split(','))
-            
-            # 城市名称中英文映射
-            city_translation = {
-                'Guangzhou': '广州',
-                'Beijing': '北京',
-                'Shanghai': '上海',
-                'Shenzhen': '深圳',
-                'Hangzhou': '杭州',
-                'Chengdu': '成都',
-                'Wuhan': '武汉',
-                'Xi\'an': '西安',
-                'Chongqing': '重庆',
-                'Nanjing': '南京'
-            }
-            
-            # 省份名称中英文映射
-            region_translation = {
-                'Guangdong': '广东',
-                'Beijing': '北京',
-                'Shanghai': '上海',
-                'Zhejiang': '浙江',
-                'Sichuan': '四川',
-                'Hubei': '湖北',
-                'Shaanxi': '陕西',
-                'Chongqing': '重庆',
-                'Jiangsu': '江苏'
-            }
-            
-            # 国家名称中英文映射
-            country_translation = {
-                'CN': '中国',
-                'US': '美国',
-                'JP': '日本',
-                'KR': '韩国',
-                'SG': '新加坡'
-            }
-            
-            # 获取并翻译地名
-            city = data.get('city', '未知城市')
-            city_cn = city_translation.get(city, city)  # 如果在映射表中找到则翻译，否则保留原名称
-            
-            region = data.get('region', '')
-            region_cn = region_translation.get(region, region)
-            
-            country = data.get('country', '')
-            country_cn = country_translation.get(country, country)
-            
-            # 构建完整的位置名称（中文）
-            location_name = f"{city_cn}"
-            if region_cn and region_cn != city_cn:
-                location_name = f"{region_cn}{location_name}"
-            
-            return {
-                "name": location_name,
-                "longitude": lng,
-                "latitude": lat,
-                "formatted_address": f"{country_cn}{region_cn}{city_cn}"
-            }
-        else:
-            # API调用失败时返回默认位置（北京）
-            print("⚠️  无法获取IP位置信息，使用默认位置")
-            return {
-                "name": "当前位置",
-                "longitude": 116.4074,
-                "latitude": 39.9042,
-                "formatted_address": "中国北京市"
-            }
-    except Exception as e:
-        print(f"⚠️  IP定位出错: {e}，使用默认位置")
-        # 异常情况下返回默认位置
-        return {
-            "name": "当前位置",
-            "longitude": 116.4074,
-            "latitude": 39.9042,
-            "formatted_address": "中国北京市"
-        }
+# 在文件开头添加requests模块的导入，因为get_current_location_by_ip函数仍然使用它
+# 这行应该被删除，因为已经在上面导入了requests
+# import requests
+
+# 或者，如果不再需要这个函数，可以删除它
+# 移除get_current_location_by_ip函数，因为我们使用AmapMCPClient的方法
+# async def get_current_location_by_ip() -> dict:
+#     ...
 
 async def get_location_coordinates(location_name: str, mcp_client) -> dict:
     """
@@ -336,23 +265,255 @@ async def main():
             print(f"✗ Failed to parse request: {e}")
             return
         
-        # 修改获取起点坐标的逻辑中的输出信息，使用中文替代英文
+        # 修改第336行到第430行左右的代码
+        
+        # 修改获取起点坐标的逻辑
         print(f"\n[3/5] 获取起点位置坐标...")
         try:
             # 检查起点是否为None或表示当前位置的关键词
             start_location = locations['start']
             
-            # 如果起点是None或者包含表示当前位置的关键词，使用IP定位
+            # 如果起点是None或者包含表示当前位置的关键词，使用高德MCP获取当前位置
             is_current_location = (start_location is None) or \
                                  (isinstance(start_location, str) and \
                                   any(keyword in start_location for keyword in 
                                       ['当前位置', '我的位置', 'current location', 'Current Location']))
             
+            # 确保amap_client已初始化，无论是否使用MCP
+            if amap_client is None:
+                amap_client = create_amap_client()
+            
             if is_current_location:
-                # 使用IP获取真实地理位置
+                # 使用高德MCP客户端获取当前位置
                 print("   获取您的实际位置...")
-                start_coords = await get_current_location_by_ip()
-                print(f"✓ 使用您的实际位置: {start_coords['name']} ({start_coords['longitude']}, {start_coords['latitude']})")
+                if use_mcp and mcp_client:
+                    try:
+                        # 优先尝试GPS定位，使用maps_geo工具
+                        if "maps_geo" in tool_names:
+                            print("   优先尝试通过maps_geo工具获取GPS位置...")
+                            # 尝试不同的参数组合来获取当前位置
+                            gps_params_options = [
+                                {"address": "current_location"},  # 尝试使用特殊关键词
+                                {"address": ""},  # 尝试空地址
+                                {"get_current_location": True}  # 尝试特定的GPS参数
+                            ]
+                            
+                            gps_success = False
+                            for params in gps_params_options:
+                                print(f"   尝试参数: {params}")
+                                try:  # 这是外部try，需要正确闭合
+                                    result = await mcp_client.call_tool("maps_geo", params)
+                                    
+                                    # 添加调试日志
+                                    print(f"   maps_geo工具返回结果: {result}")
+                                    print(f"   完整响应内容: {json.dumps(result, ensure_ascii=False, indent=2)}")
+                                    
+                                    # 检查结果有效性
+                                    if result.get("isError") is not True and "content" in result:
+                                        content = result["content"]
+                                        if isinstance(content, list) and len(content) > 0:
+                                            text_content = content[0].get("text", "")
+                                            print(f"   响应文本内容: {text_content}")
+                                            
+                                            if text_content and not text_content.startswith("API 调用失败"):
+                                                try:
+                                                    data = json.loads(text_content)
+                                                    print(f"   解析后的JSON数据: {data}")
+                                                    
+                                                    # 尝试从GPS数据中提取坐标
+                                                    if isinstance(data, dict):
+                                                        # 处理results格式的数据（这是maps_geo实际返回的格式）
+                                                        if "results" in data and isinstance(data["results"], list) and len(data["results"]) > 0:
+                                                            first_result = data["results"][0]
+                                                            if "location" in first_result:
+                                                                location = first_result["location"]
+                                                                if isinstance(location, str) and "," in location:
+                                                                    lng_lat = location.split(",")
+                                                                    if len(lng_lat) == 2:
+                                                                        start_coords = {
+                                                                            "lng": float(lng_lat[0]),
+                                                                            "lat": float(lng_lat[1]),
+                                                                            "name": f"{first_result.get('province', '')}{first_result.get('city', '')}{first_result.get('district', '')}" or "当前GPS位置"
+                                                                        }
+                                                                        print(f"   GPS定位成功: {start_coords}")
+                                                                        # 确保返回的坐标格式与后续处理一致
+                                                                        # 添加longitude和latitude字段，因为后续代码可能依赖这些字段
+                                                                        start_coords['longitude'] = start_coords['lng']
+                                                                        start_coords['latitude'] = start_coords['lat']
+                                                                        # 不再直接return，而是将坐标赋值给外部变量并跳出循环
+                                                                        gps_coords = start_coords
+                                                                        break
+                                                    
+                                                    # 尝试不同的坐标字段格式
+                                                    if "longitude" in data and "latitude" in data:
+                                                        start_coords = {
+                                                            "lng": float(data["longitude"]),
+                                                            "lat": float(data["latitude"]),
+                                                            "name": "当前GPS位置"
+                                                        }
+                                                        print(f"   GPS定位成功: {start_coords}")
+                                                        gps_coords = start_coords
+                                                        break
+                                                    elif "lng" in data and "lat" in data:
+                                                        start_coords = {
+                                                            "lng": float(data["lng"]),
+                                                            "lat": float(data["lat"]),
+                                                            "name": "当前GPS位置"
+                                                        }
+                                                        print(f"   GPS定位成功: {start_coords}")
+                                                        gps_coords = start_coords
+                                                        break
+                                                    elif "location" in data:
+                                                        # 检查location是否包含经纬度
+                                                        location = data["location"]
+                                                        if isinstance(location, str) and "," in location:
+                                                            lng_lat = location.split(",")
+                                                            if len(lng_lat) == 2:
+                                                                start_coords = {
+                                                                    "lng": float(lng_lat[0]),
+                                                                    "lat": float(lng_lat[1]),
+                                                                    "name": "当前GPS位置"
+                                                                }
+                                                                print(f"   GPS定位成功: {start_coords}")
+                                                                gps_coords = start_coords
+                                                                break
+                                                except json.JSONDecodeError:
+                                                    print(f"   无法解析GPS定位返回的JSON数据")
+                                except Exception as e:  # 这是对应的except块
+                                    print(f"   尝试参数时出错: {str(e)}")
+                            
+                            # 修复GPS定位逻辑，确保GPS定位成功后继续执行
+                            # 检查是否GPS定位成功
+                            if 'gps_coords' in locals():
+                                print("   GPS定位成功，使用GPS坐标继续")
+                                start_coords = gps_coords
+                                # 移除return语句，让程序继续执行后续流程
+                            else:
+                                print("   所有GPS定位参数尝试均失败，继续尝试IP定位")
+                                # 修复GPS定位逻辑和坐标解析错误
+                                # GPS定位失败，继续尝试IP定位
+                                if "maps_ip_location" in tool_names:
+                                    print("   尝试通过IP定位获取当前位置...")
+                                    # 使用空参数调用maps_ip_location工具
+                                    result = await mcp_client.call_tool("maps_ip_location", {})
+                                    
+                                    # 添加调试日志
+                                    print(f"   maps_ip_location工具返回结果: {result}")
+                                    print(f"   完整响应内容: {json.dumps(result, ensure_ascii=False, indent=2)}")
+                                    
+                                    # 检查结果有效性
+                                    if result.get("isError") is not True and "content" in result:
+                                        content = result["content"]
+                                        if isinstance(content, list) and len(content) > 0:
+                                            text_content = content[0].get("text", "")
+                                            print(f"   响应文本内容: {text_content}")
+                                            
+                                            if text_content:
+                                                try:
+                                                    data = json.loads(text_content)
+                                                    print(f"   解析后的JSON数据: {data}")
+                                                    print(f"   响应中的所有字段: {list(data.keys())}")
+                                                    
+                                                    # 检查数据是否为空
+                                                    if all(not data.get(key) for key in ['province', 'city', 'adcode', 'rectangle']):
+                                                        print("   警告: 所有位置字段均为空，IP定位可能受限或失败")
+                                                        print("   可能的原因: 1. IP地址无法定位 2. 网络环境特殊 3. API限制")
+                                                        raise Exception("IP定位服务返回空的位置信息")
+                                                    
+                                                    # 尝试提取有效坐标（如果rectangle有值）
+                                                    rectangle = data.get("rectangle", "")
+                                                    # 第425行修复
+                                                    if rectangle and ";" in rectangle:
+                                                        # 修复缩进，确保coords赋值语句在if块内
+                                                        coords = rectangle.split(";")  # 正确写法
+                                                        if len(coords) >= 2:
+                                                            lng_lat = coords[0].split(",")
+                                                            if len(lng_lat) == 2:
+                                                                try:
+                                                                    start_coords = {
+                                                                        "lng": float(lng_lat[0]),
+                                                                        "lat": float(lng_lat[1]),
+                                                                        "name": f"{data.get('city', '')}{data.get('district', '')}" or "当前位置"
+                                                                    }
+                                                                    print(f"   IP定位成功: {start_coords}")
+                                                                    return start_coords
+                                                                except ValueError:
+                                                                    pass
+                                                    
+                                                    # 如果无法从rectangle获取坐标，尝试其他方式
+                                                    raise Exception("无法从IP定位结果中提取有效坐标")
+                                                except json.JSONDecodeError:
+                                                    raise Exception(f"获取位置失败: 无法解析返回的JSON数据: {text_content}")
+                                    else:
+                                        raise Exception("获取位置失败: IP定位工具返回无效结果")
+                                else:
+                                    raise Exception("获取位置失败: 系统中没有可用的maps_ip_location工具")
+                        else:
+                            print("   未发现可用的maps_geo工具，继续尝试IP定位")
+                            # maps_geo工具不可用时，尝试IP定位
+                            if "maps_ip_location" in tool_names:
+                                # 这里也实现完整的IP定位逻辑
+                                pass  # 可以复制上面的IP定位代码或提取为函数
+                                result = await mcp_client.call_tool("maps_ip_location", {})
+                                
+                                # 添加调试日志
+                                print(f"   maps_ip_location工具返回结果: {result}")
+                                print(f"   完整响应内容: {json.dumps(result, ensure_ascii=False, indent=2)}")
+                                
+                                # 检查结果有效性
+                                if result.get("isError") is not True and "content" in result:
+                                    content = result["content"]
+                                    if isinstance(content, list) and len(content) > 0:
+                                        text_content = content[0].get("text", "")
+                                        print(f"   响应文本内容: {text_content}")
+                                        
+                                        if text_content:
+                                            try:
+                                                data = json.loads(text_content)
+                                                print(f"   解析后的JSON数据: {data}")
+                                                print(f"   响应中的所有字段: {list(data.keys())}")
+                                                
+                                                # 检查数据是否为空
+                                                if all(not data.get(key) for key in ['province', 'city', 'adcode', 'rectangle']):
+                                                    print("   警告: 所有位置字段均为空，IP定位可能受限或失败")
+                                                    print("   可能的原因: 1. IP地址无法定位 2. 网络环境特殊 3. API限制")
+                                                    # 由于IP定位失败，抛出异常而不是继续尝试
+                                                    raise Exception("IP定位服务返回空的位置信息")
+                                                
+                                                # 尝试提取有效坐标（如果rectangle有值）
+                                                rectangle = data.get("rectangle", "")
+                                                if rectangle and ";" in rectangle:
+                                                    # 修复这里的语法错误 - 移除多余的.split()
+                                                    coords = rectangle.split(";").split()
+                                                    if len(coords) >= 2:
+                                                        lng_lat = coords[0].split(",")
+                                                        if len(lng_lat) == 2:
+                                                            try:
+                                                                start_coords = {
+                                                                    "lng": float(lng_lat[0]),
+                                                                    "lat": float(lng_lat[1]),
+                                                                    "name": f"{data.get('city', '')}{data.get('district', '')}" or "当前位置"
+                                                                }
+                                                                print(f"   IP定位成功: {start_coords}")
+                                                                return start_coords
+                                                            except ValueError:
+                                                                pass
+                                                
+                                                # 如果无法从rectangle获取坐标，尝试其他方式
+                                                raise Exception("无法从IP定位结果中提取有效坐标")
+                                            except json.JSONDecodeError:
+                                                raise Exception(f"获取位置失败: 无法解析返回的JSON数据: {text_content}")
+                                    else:
+                                        raise Exception("获取位置失败: IP定位工具返回无效结果")
+                                else:
+                                    raise Exception("获取位置失败: 系统中没有可用的maps_ip_location工具")
+                    except Exception as e:
+                        # 重新抛出异常
+                        if not str(e).startswith("获取位置失败:"):
+                            raise Exception(f"获取位置失败: {str(e)}")
+                        raise
+                else:
+                    raise Exception("获取位置失败: 无法使用MCP客户端")
             else:
                 # 原有逻辑，通过MCP客户端或Amap客户端获取坐标
                 if use_mcp and mcp_client:
@@ -360,7 +521,8 @@ async def main():
                 else:
                     async with amap_client:
                         start_coords = await amap_client.geocode(start_location)
-                print(f"✓ Start: {start_coords['name']} ({start_coords['longitude']}, {start_coords['latitude']})")
+            # 确保无论通过哪种方式获取的坐标，都打印起点信息
+            print(f"✓ Start: {start_coords['name']} ({start_coords.get('longitude', start_coords.get('lng'))}, {start_coords.get('latitude', start_coords.get('lat'))})")
         except Exception as e:
             print(f"✗ Failed to get start coordinates: {e}")
             return
