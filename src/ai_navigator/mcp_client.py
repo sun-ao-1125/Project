@@ -19,6 +19,9 @@ import uuid
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Disable httpx INFO logging to prevent API keys in URLs from being logged
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 
 def _mask_sensitive_value(value: str, show_chars: int = 4) -> str:
     """

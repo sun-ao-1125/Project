@@ -39,6 +39,9 @@ except ImportError:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Disable httpx INFO logging to prevent API keys in URLs from being logged
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 
 def _sanitize_url(url: str) -> str:
     """
