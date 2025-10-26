@@ -1,5 +1,6 @@
 """Tests for MCP Network Server"""
 import pytest
+import asyncio
 import aiohttp
 from unittest.mock import AsyncMock, Mock, patch
 
